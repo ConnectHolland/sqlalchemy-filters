@@ -14,6 +14,16 @@ SQLAlchemy filters
 
 
 # Installation
+Add the following to your `pyproject.toml` file:
+```
+[[tool.poetry.source]]
+name = "connectholland"
+url = "https://pypi.packages.connectholland.nl/simple/"
+``` 
+To add the repository credentials: `poetry config http-basic.connectholland connectholland <read_secret>`.
+
+The <read_secret> can be found in the CH_Secrets AWS account > Systems Manager > Parameter Store as the `/ch/pypi/read-secret` parameter (eu-west-1 region)
+
 This package supports SQLite, MySQL and PostgreSQL, depending on which engine you use you have to install this package with either the `mysql` or `postgresql` extra: `poetry add sqlalchemy-filters --extras "mysql"`.
 
 Filtering
