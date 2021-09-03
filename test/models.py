@@ -3,6 +3,7 @@
 from sqlalchemy import (
     Column, Date, DateTime, ForeignKey, Integer, String, Time
 )
+from sqlalchemy.dialects.mysql import SET
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.hybrid import hybrid_property, hybrid_method
@@ -25,6 +26,7 @@ class Base(object):
 
 Base = declarative_base(cls=Base)
 BasePostgresqlSpecific = declarative_base(cls=Base)
+BaseMysqlSpecific = declarative_base(cls=Base)
 
 
 class Foo(Base):
@@ -62,3 +64,10 @@ class Corge(BasePostgresqlSpecific):
     __tablename__ = 'corge'
 
     tags = Column(ARRAY(String, dimensions=1))
+
+
+class Grault(BaseMysqlSpecific):
+
+    __tablename__ = 'grault'
+
+    types = Column(SET("foo", "bar", "baz"), nullable=True)

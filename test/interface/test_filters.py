@@ -12,11 +12,15 @@ from sqlalchemy_filters.exceptions import (
     BadFilterFormat, BadSpec, FieldNotFound
 )
 
-from test.models import Foo, Bar, Qux, Corge
-
+from test.models import Foo, Bar, Qux, Corge, Grault
 
 ARRAY_NOT_SUPPORTED = (
     "ARRAY type and operators supported only by PostgreSQL"
+)
+
+
+SET_NOT_SUPPORTED = (
+    "SET type and operators supported only by MySQL"
 )
 
 
@@ -82,6 +86,17 @@ def multiple_corges_inserted(session, is_postgresql):
         corge_3 = Corge(id=3, name='name_3', tags=['foo', 'bar'])
         corge_4 = Corge(id=4, name='name_4', tags=['bar', 'baz'])
         session.add_all([corge_1, corge_2, corge_3, corge_4])
+        session.commit()
+
+
+@pytest.fixture
+def multiple_graults_inserted(session, is_mysql):
+    if is_mysql:
+        grault_1 = Grault(id=1, name='name_1', types=["foo"])
+        grault_2 = Grault(id=2, name='name_2', types=["foo", "bar"])
+        grault_3 = Grault(id=3, name='name_3', types=["foo", "baz"])
+        grault_4 = Grault(id=4, name='name_4', types=["foo", "bar", "baz"])
+        session.add_all([grault_1, grault_2, grault_3, grault_4])
         session.commit()
 
 
@@ -733,6 +748,33 @@ class TestApplyNotInFilter:
         assert len(result) == 2
         assert result[0].id == 1
         assert result[1].id == 2
+
+
+class TestApplyFindInSetFilter:
+
+    @pytest.mark.parametrize(
+        'value,result_count,result_ids',
+        [
+            ('none', 0, []),
+            ('foo', 4, [1, 2, 3, 4]),
+            ('bar', 2, [2, 4]),
+            ('baz', 2, [3, 4]),
+        ]
+    )
+    @pytest.mark.usefixtures('multiple_graults_inserted')
+    def test_field_in_value_list(self, session, is_mysql, value, result_count, result_ids):
+        if not is_mysql:
+            pytest.skip(SET_NOT_SUPPORTED)
+
+        query = session.query(Grault)
+        filters = [{'field': 'types', 'op': 'find_in_set', 'value': value}]
+
+        filtered_query = apply_filters(query, filters)
+        result = filtered_query.all()
+
+        assert len(result) == result_count
+        for index in range(result_count):
+            assert result[index].id == result_ids[index]
 
 
 class TestDateFields:

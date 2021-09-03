@@ -5,8 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy_utils import create_database, drop_database, database_exists
 
-from test.models import Base, BasePostgresqlSpecific
-
+from test.models import Base, BasePostgresqlSpecific, BaseMysqlSpecific
 
 SQLITE_TEST_DB_URI = 'SQLITE_TEST_DB_URI'
 MYSQL_TEST_DB_URI = 'MYSQL_TEST_DB_URI'
@@ -102,6 +101,13 @@ def is_postgresql(db_uri):
 
 
 @pytest.fixture(scope='session')
+def is_mysql(db_uri):
+    if 'mysql' in db_uri:
+        return True
+    return False
+
+
+@pytest.fixture(scope='session')
 def is_sqlite(db_uri):
     if 'sqlite' in db_uri:
         return True
@@ -119,7 +125,7 @@ def db_engine_options(db_uri, is_postgresql):
 
 
 @pytest.fixture(scope='session')
-def connection(db_uri, db_engine_options, is_postgresql):
+def connection(db_uri, db_engine_options, is_postgresql, is_mysql):
     create_db(db_uri)
     engine = create_engine(db_uri, **db_engine_options)
     Base.metadata.create_all(engine)
@@ -128,6 +134,9 @@ def connection(db_uri, db_engine_options, is_postgresql):
     if is_postgresql:
         BasePostgresqlSpecific.metadata.create_all(engine)
         BasePostgresqlSpecific.metadata.bind = engine
+    if is_mysql:
+        BaseMysqlSpecific.metadata.create_all(engine)
+        BaseMysqlSpecific.metadata.bind = engine
 
     yield connection
 
@@ -136,7 +145,7 @@ def connection(db_uri, db_engine_options, is_postgresql):
 
 
 @pytest.fixture()
-def session(connection, is_postgresql):
+def session(connection, is_postgresql, is_mysql):
     Session = sessionmaker(bind=connection)
     db_session = Session()
 
@@ -146,6 +155,9 @@ def session(connection, is_postgresql):
         db_session.execute(table.delete())
     if is_postgresql:
         for table in reversed(BasePostgresqlSpecific.metadata.sorted_tables):
+            db_session.execute(table.delete())
+    if is_mysql:
+        for table in reversed(BaseMysqlSpecific.metadata.sorted_tables):
             db_session.execute(table.delete())
 
     db_session.commit()
