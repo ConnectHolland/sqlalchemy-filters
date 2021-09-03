@@ -182,7 +182,7 @@ postgresql = ["psycopg2-binary"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "b7e762164796c9df78e5fefa3daaeab2b4fd173eebb365a3952a8b0a8d7e8972"
+content-hash = "5f162c6b7078d723ec7afa904e0d98703ec83d5222cebbbe1922cafce02f0df3"
 
 [metadata.files]
 atomicwrites = [
