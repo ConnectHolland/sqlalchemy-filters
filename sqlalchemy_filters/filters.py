@@ -58,7 +58,7 @@ class Operator(object):
         'not_in': lambda f, a: ~f.in_(a),
         'any': lambda f, a: f.any(a),
         'not_any': lambda f, a: func.not_(f.any(a)),
-        'find_in_set': lambda f, a: func.find_in_set(a, f),
+        'in_set': lambda f, a: func.find_in_set(a, f),
     }
 
     def __init__(self, operator=None):
