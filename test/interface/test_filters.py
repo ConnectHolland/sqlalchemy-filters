@@ -767,7 +767,7 @@ class TestApplyFindInSetFilter:
             pytest.skip(SET_NOT_SUPPORTED)
 
         query = session.query(Grault)
-        filters = [{'field': 'types', 'op': 'find_in_set', 'value': value}]
+        filters = [{'field': 'types', 'op': 'in_set', 'value': value}]
 
         filtered_query = apply_filters(query, filters)
         result = filtered_query.all()
