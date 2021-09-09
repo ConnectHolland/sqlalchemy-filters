@@ -12,7 +12,7 @@ from sqlalchemy_filters.exceptions import (
     BadFilterFormat, BadSpec, FieldNotFound
 )
 
-from test.models import Foo, Bar, Qux, Corge, Grault
+from test.models import Foo, Bar, Qux, Corge, Grault, Garply, Point
 
 ARRAY_NOT_SUPPORTED = (
     "ARRAY type and operators supported only by PostgreSQL"
@@ -98,6 +98,16 @@ def multiple_graults_inserted(session, is_mysql):
         grault_4 = Grault(id=4, name='name_4', types=["foo", "bar", "baz"])
         session.add_all([grault_1, grault_2, grault_3, grault_4])
         session.commit()
+
+
+@pytest.fixture
+def multiple_garply_inserted(session, is_mysql):
+    garply_1 = Garply(id=1, name='name_1', count=1, x=1, y=1)
+    garply_2 = Garply(id=2, name='name_2', count=2, x=2, y=2)
+    garply_3 = Garply(id=3, name='name_3', count=3, x=3, y=3)
+    garply_4 = Garply(id=4, name='name_4', count=4, x=4, y=4)
+    session.add_all([garply_1, garply_2, garply_3, garply_4])
+    session.commit()
 
 
 class TestFiltersNotApplied:
@@ -768,6 +778,28 @@ class TestApplyFindInSetFilter:
 
         query = session.query(Grault)
         filters = [{'field': 'types', 'op': 'in_set', 'value': value}]
+
+        filtered_query = apply_filters(query, filters)
+        result = filtered_query.all()
+
+        assert len(result) == result_count
+        for index in range(result_count):
+            assert result[index].id == result_ids[index]
+
+
+class TestCompositeField:
+
+    @pytest.mark.parametrize(
+        'value,result_count,result_ids',
+        [
+            (Point(0, 0), 0, []),
+            (Point(3, 3), 1, [3]),
+        ]
+    )
+    @pytest.mark.usefixtures("multiple_garply_inserted")
+    def test_filter_composite_field(self, session, value, result_count, result_ids):
+        query = session.query(Garply)
+        filters = [{'field': 'points', 'op': '==', 'value': value}]
 
         filtered_query = apply_filters(query, filters)
         result = filtered_query.all()
