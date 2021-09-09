@@ -35,12 +35,13 @@ class Field(object):
         orm_descriptors = inspect_mapper.all_orm_descriptors
 
         column_names = columns.keys()
+        composite_names = inspect_mapper.composites.keys()
         hybrid_names = [
             key for key, item in orm_descriptors.items()
             if _is_hybrid_property(item) or _is_hybrid_method(item)
         ]
 
-        return set(column_names) | set(hybrid_names)
+        return set(column_names) | set(hybrid_names) | set(composite_names)
 
 
 def _is_hybrid_property(orm_descriptor):

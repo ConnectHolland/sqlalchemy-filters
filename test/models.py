@@ -7,7 +7,7 @@ from sqlalchemy.dialects.mysql import SET
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.hybrid import hybrid_property, hybrid_method
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, composite
 
 
 class Base(object):
@@ -22,6 +22,24 @@ class Base(object):
     @hybrid_method
     def three_times_count(self):
         return self.count * 3
+
+
+class Point(object):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __composite_values__(self):
+        return self.x, self.y
+
+    def __repr__(self):
+        return "Point(x=%r, y=%r)" % (self.x, self.y)
+
+    def __eq__(self, other):
+        return isinstance(other, Point) and other.x == self.x and other.y == self.y
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 
 Base = declarative_base(cls=Base)
@@ -71,3 +89,13 @@ class Grault(BaseMysqlSpecific):
     __tablename__ = 'grault'
 
     types = Column(SET("foo", "bar", "baz"), nullable=True)
+
+
+class Garply(Base):
+
+    __tablename__ = 'garply'
+
+    x = Column(Integer)
+    y = Column(Integer)
+    points = composite(Point, x, y)
+
