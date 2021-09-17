@@ -15,10 +15,10 @@ except ImportError:  # pragma: no cover
 from itertools import chain
 
 from six import string_types
-from sqlalchemy import and_, or_, not_, func
+from sqlalchemy import and_, or_, not_, func, inspect
 
 from .exceptions import BadFilterFormat
-from .models import Field, auto_join, get_model_from_spec, get_default_model
+from .models import Field, auto_join, get_model_from_spec, get_default_model, get_relationship_models
 
 
 BooleanFunction = namedtuple(
@@ -93,10 +93,9 @@ class Filter(object):
         if not value_present and self.operator.arity == 2:
             raise BadFilterFormat('`value` must be provided.')
 
-    def get_named_models(self):
-        if "model" in self.filter_spec:
-            return {self.filter_spec['model']}
-        return set()
+    def get_named_models(self, model):
+        field = self.filter_spec['field']
+        return get_relationship_models(model, field)
 
     def format_for_sqlalchemy(self, query, default_model):
         filter_spec = self.filter_spec
@@ -125,10 +124,10 @@ class BooleanFilter(object):
         self.function = function
         self.filters = filters
 
-    def get_named_models(self):
+    def get_named_models(self, base_model):
         models = set()
         for filter in self.filters:
-            models.update(filter.get_named_models())
+            models.update(filter.get_named_models(base_model))
         return models
 
     def format_for_sqlalchemy(self, query, default_model):
@@ -189,15 +188,18 @@ def build_filters(filter_spec):
     return [Filter(filter_spec)]
 
 
-def get_named_models(filters):
-    models = set()
+def get_named_models(base_model, filters):
+    models = list()
     for filter in filters:
-        models.update(filter.get_named_models())
+        models.extend(filter.get_named_models(base_model))
     return models
 
 
-def apply_filters(query, filter_spec, do_auto_join=True):
+def apply_filters(model, query, filter_spec, do_auto_join=True):
     """Apply filters to a SQLAlchemy query.
+
+    :param model:
+        A :class:`sqlalchemy.ext.declarative.DeclarativeMeta` from the model to apply the filters on.
 
     :param query:
         A :class:`sqlalchemy.orm.Query` instance.
@@ -233,14 +235,12 @@ def apply_filters(query, filter_spec, do_auto_join=True):
     """
     filters = build_filters(filter_spec)
 
-    default_model = get_default_model(query)
-
-    filter_models = get_named_models(filters)
+    filter_models = get_named_models(model, filters)
     if do_auto_join:
         query = auto_join(query, *filter_models)
 
     sqlalchemy_filters = [
-        filter.format_for_sqlalchemy(query, default_model)
+        filter.format_for_sqlalchemy(query, model)
         for filter in filters
     ]
 

@@ -14,13 +14,14 @@ class Field(object):
         self.field_name = field_name
 
     def get_sqlalchemy_field(self):
-        if self.field_name not in self._get_valid_field_names():
+        sqlalchemy_field = get_nested_column(self.model, self.field_name)
+
+        if sqlalchemy_field is None:
             raise FieldNotFound(
                 'Model {} has no column `{}`.'.format(
                     self.model, self.field_name
                 )
             )
-        sqlalchemy_field = getattr(self.model, self.field_name)
 
         # If it's a hybrid method, then we call it so that we can work with
         # the result of the execution and not with the method object itself
@@ -29,20 +30,6 @@ class Field(object):
 
         return sqlalchemy_field
 
-    def _get_valid_field_names(self):
-        inspect_mapper = inspect(self.model)
-        columns = inspect_mapper.columns
-        orm_descriptors = inspect_mapper.all_orm_descriptors
-
-        column_names = columns.keys()
-        composite_names = inspect_mapper.composites.keys()
-        hybrid_names = [
-            key for key, item in orm_descriptors.items()
-            if _is_hybrid_property(item) or _is_hybrid_method(item)
-        ]
-
-        return set(column_names) | set(hybrid_names) | set(composite_names)
-
 
 def _is_hybrid_property(orm_descriptor):
     return orm_descriptor.extension_type == symbol('HYBRID_PROPERTY')
@@ -50,6 +37,60 @@ def _is_hybrid_property(orm_descriptor):
 
 def _is_hybrid_method(orm_descriptor):
     return orm_descriptor.extension_type == symbol('HYBRID_METHOD')
+
+
+def get_relationship_models(model, field):
+    parts = field.split(".")
+
+    if len(parts) > 1:
+        # Order in which joins are applied to the query matters so use list.
+        relationships = list()
+
+        # Find all relationships.
+        for i in range(1, len(parts)):
+            if (column := find_nested_relationship_model(inspect(model), parts[0:i])) is not None:
+                relationships.append(column.class_attribute)
+
+        return relationships
+
+    return list()
+
+
+def find_nested_relationship_model(mapper, field):
+    parts = field if isinstance(field, list) else field.split(".")
+
+    if (part := parts[0]) in mapper.relationships:
+        related_field = mapper.relationships[part]
+        return find_nested_relationship_model(related_field.mapper, ".".join(parts[1::])) if len(parts) > 1 else related_field
+    else:
+        return None
+
+
+def get_nested_column(model, field):
+    """
+    Searches through relationships to find the requested field.
+    """
+    parts = field if isinstance(field, list) else field.split(".")
+
+    mapper = inspect(model)
+    orm_descriptors = mapper.all_orm_descriptors
+    hybrid_fields = [
+        key for key, item in orm_descriptors.items()
+        if _is_hybrid_property(item) or _is_hybrid_method(item)
+    ]
+
+    # Search in own model fields
+    if len(parts) == 1:
+        if field in mapper.columns or field in mapper.composites or field in hybrid_fields:
+            return getattr(model, field)
+        else:
+            return None
+
+    # Search in relationships.
+    if (part := parts[0]) in mapper.relationships:
+        return get_nested_column(getattr(model, part).class_, ".".join(parts[1::]))
+    else:
+        return None
 
 
 def get_query_models(query):
@@ -127,14 +168,6 @@ def get_model_from_spec(spec, query, default_model=None):
     return model
 
 
-def get_model_class_by_name(registry, name):
-    """ Return the model class matching `name` in the given `registry`.
-    """
-    for cls in registry.values():
-        if getattr(cls, '__name__', None) == name:
-            return cls
-
-
 def get_default_model(query):
     """ Return the singular model from `query`, or `None` if `query` contains
     multiple models.
@@ -147,19 +180,14 @@ def get_default_model(query):
     return default_model
 
 
-def auto_join(query, *model_names):
-    """ Automatically join models to `query` if they're not already present
-    and the join can be done implicitly.
+def auto_join(query, *relationships):
+    """ Automatically join models to `query` if they're not already present.
     """
-    # every model has access to the registry, so we can use any from the query
-    query_models = get_query_models(query).values()
-    model_registry = list(query_models)[-1]._decl_class_registry
-
-    for name in model_names:
-        model = get_model_class_by_name(model_registry, name)
+    for relationship in relationships:
+        model = relationship.property.entity.class_
         if model not in get_query_models(query).values():
             try:
-                query = query.join(model)
+                query = query.join(relationship)
             except InvalidRequestError:
                 pass  # can't be autojoined
     return query

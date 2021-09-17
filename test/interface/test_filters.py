@@ -116,7 +116,7 @@ class TestFiltersNotApplied:
         query = session.query(Bar)
         filters = []
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
 
         assert query == filtered_query
 
@@ -126,7 +126,7 @@ class TestFiltersNotApplied:
         filters = [filter_]
 
         with pytest.raises(BadFilterFormat) as err:
-            apply_filters(query, filters)
+            apply_filters(Bar, query, filters)
 
         expected_error = 'Filter spec `{}` should be a dictionary.'.format(
             filter_
@@ -138,7 +138,7 @@ class TestFiltersNotApplied:
         filters = [{'field': 'name', 'op': 'op_not_valid', 'value': 'name_1'}]
 
         with pytest.raises(BadFilterFormat) as err:
-            apply_filters(query, filters)
+            apply_filters(Bar, query, filters)
 
         assert 'Operator `op_not_valid` not valid.' == err.value.args[0]
 
@@ -147,7 +147,7 @@ class TestFiltersNotApplied:
         query = session.query(Bar)
         filters = [{'field': 'name', 'value': 'name_1'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -159,7 +159,7 @@ class TestFiltersNotApplied:
         filters = [{'op': '==', 'value': 'name_1'}]
 
         with pytest.raises(BadFilterFormat) as err:
-            apply_filters(query, filters)
+            apply_filters(Bar, query, filters)
 
         expected_error = '`field` is a mandatory filter attribute.'
         assert expected_error == err.value.args[0]
@@ -171,7 +171,7 @@ class TestFiltersNotApplied:
         filters = [{'field': 'name', 'op': '==', }]
 
         with pytest.raises(BadFilterFormat) as err:
-            apply_filters(query, filters)
+            apply_filters(Bar, query, filters)
 
         assert '`value` must be provided.' == err.value.args[0]
 
@@ -180,7 +180,7 @@ class TestFiltersNotApplied:
         filters = [{'field': 'invalid_field', 'op': '==', 'value': 'name_1'}]
 
         with pytest.raises(FieldNotFound) as err:
-            apply_filters(query, filters)
+            apply_filters(Bar, query, filters)
 
         expected_error = (
             "Model <class 'test.models.Bar'> has no column `invalid_field`."
@@ -196,7 +196,7 @@ class TestFiltersNotApplied:
         filters = [{'field': attr_name, 'op': '==', 'value': 'name_1'}]
 
         with pytest.raises(FieldNotFound) as err:
-            apply_filters(query, filters)
+            apply_filters(Bar, query, filters)
 
         expected_error = (
             "Model <class 'test.models.Bar'> has no column `{}`.".format(
@@ -204,31 +204,6 @@ class TestFiltersNotApplied:
             )
         )
         assert expected_error == err.value.args[0]
-
-
-class TestMultipleModels:
-
-    # TODO: multi-model should be tested for each filter type
-    @pytest.mark.usefixtures('multiple_bars_inserted')
-    @pytest.mark.usefixtures('multiple_quxs_inserted')
-    def test_multiple_models(self, session):
-        query = session.query(Bar, Qux)
-        filters = [
-            {'model': 'Bar', 'field': 'name', 'op': '==', 'value': 'name_1'},
-            {'model': 'Qux', 'field': 'name', 'op': '==', 'value': 'name_1'},
-        ]
-
-        filtered_query = apply_filters(query, filters)
-        result = filtered_query.all()
-
-        assert len(result) == 4
-        bars, quxs = zip(*result)
-        assert set(map(type, bars)) == {Bar}
-        assert {bar.id for bar in bars} == {1, 3}
-        assert {bar.name for bar in bars} == {"name_1"}
-        assert set(map(type, quxs)) == {Qux}
-        assert {qux.id for qux in quxs} == {1, 3}
-        assert {qux.name for qux in quxs} == {"name_1"}
 
 
 class TestAutoJoin:
@@ -239,74 +214,33 @@ class TestAutoJoin:
         query = session.query(Foo)
         filters = [
             {'field': 'name', 'op': '==', 'value': 'name_1'},
-            {'model': 'Bar', 'field': 'count', 'op': 'is_null'},
+            {'field': 'bar.count', 'op': 'is_null'},
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Foo, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
         assert result[0].id == 3
         assert result[0].bar_id == 3
         assert result[0].bar.count is None
-
-    @pytest.mark.usefixtures('multiple_foos_inserted')
-    def test_do_not_auto_join(self, session):
-
-        query = session.query(Foo)
-        filters = [
-            {'field': 'name', 'op': '==', 'value': 'name_1'},
-            {'model': 'Bar', 'field': 'count', 'op': 'is_null'},
-        ]
-
-        with pytest.raises(BadSpec) as exc:
-            apply_filters(query, filters, do_auto_join=False)
-
-        assert 'The query does not contain model `Bar`' in str(exc)
 
     @pytest.mark.usefixtures('multiple_foos_inserted')
     def test_noop_if_query_contains_named_models(self, session):
 
         query = session.query(Foo).join(Bar)
         filters = [
-            {'model': 'Foo', 'field': 'name', 'op': '==', 'value': 'name_1'},
-            {'model': 'Bar', 'field': 'count', 'op': 'is_null'},
+            {'field': 'name', 'op': '==', 'value': 'name_1'},
+            {'field': 'bar.count', 'op': 'is_null'},
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Foo, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
         assert result[0].id == 3
         assert result[0].bar_id == 3
         assert result[0].bar.count is None
-
-    @pytest.mark.usefixtures('multiple_foos_inserted')
-    def test_auto_join_to_invalid_model(self, session):
-
-        query = session.query(Foo)
-        filters = [
-            {'field': 'name', 'op': '==', 'value': 'name_1'},
-            {'model': 'Bar', 'field': 'count', 'op': 'is_null'},
-            {'model': 'Qux', 'field': 'created_at', 'op': 'is_not_null'}
-        ]
-        with pytest.raises(BadSpec) as err:
-            apply_filters(query, filters)
-
-        assert 'The query does not contain model `Qux`.' == err.value.args[0]
-
-    @pytest.mark.usefixtures('multiple_foos_inserted')
-    def test_ambiguous_query(self, session):
-
-        query = session.query(Foo).join(Bar)
-        filters = [
-            {'field': 'name', 'op': '==', 'value': 'name_1'},  # ambiguous
-            {'model': 'Bar', 'field': 'count', 'op': 'is_null'},
-        ]
-        with pytest.raises(BadSpec) as err:
-            apply_filters(query, filters)
-
-        assert 'Ambiguous spec. Please specify a model.' == err.value.args[0]
 
     @pytest.mark.usefixtures('multiple_foos_inserted')
     def test_eager_load(self, session):
@@ -315,10 +249,10 @@ class TestAutoJoin:
         query = session.query(Foo).options(joinedload(Foo.bar))
         filters = [
             {'field': 'name', 'op': '==', 'value': 'name_1'},
-            {'model': 'Bar', 'field': 'count', 'op': 'is_null'},
+            {'field': 'bar.count', 'op': 'is_null'},
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Foo, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -334,7 +268,7 @@ class TestApplyIsNullFilter:
         query = session.query(Bar)
         filters = [{'field': 'count', 'op': 'is_null'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -345,7 +279,7 @@ class TestApplyIsNullFilter:
         query = session.query(Bar)
         filters = [{'field': 'name', 'op': 'is_null'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 0
@@ -358,7 +292,7 @@ class TestApplyIsNotNullFilter:
         query = session.query(Bar)
         filters = [{'field': 'count', 'op': 'is_not_null'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 3
@@ -371,7 +305,7 @@ class TestApplyIsNotNullFilter:
         query = session.query(Bar)
         filters = [{'field': 'name', 'op': 'is_not_null'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 4
@@ -388,7 +322,7 @@ class TestApplyFiltersMultipleTimes:
         query = session.query(Bar)
         filters = [{'field': 'name', 'op': '==', 'value': 'name_1'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -399,7 +333,7 @@ class TestApplyFiltersMultipleTimes:
 
         filters = [{'field': 'id', 'op': '==', 'value': 3}]
 
-        filtered_query = apply_filters(filtered_query, filters)
+        filtered_query = apply_filters(Bar, filtered_query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -414,7 +348,7 @@ class TestApplyFilterWithoutList:
         query = session.query(Bar)
         filters = {'field': 'name', 'op': '==', 'value': 'name_1'}
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -431,7 +365,7 @@ class TestApplyFilterOnFieldBasedQuery:
         query = session.query(Bar.id)
         filters = [{'field': 'name', 'op': '==', 'value': 'name_1'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -443,7 +377,7 @@ class TestApplyFilterOnFieldBasedQuery:
         query = session.query(func.count(Bar.id))
         filters = [{'field': 'name', 'op': '==', 'value': 'name_1'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -458,7 +392,7 @@ class TestApplyEqualToFilter:
         query = session.query(Bar)
         filters = [{'field': 'name', 'op': operator, 'value': 'name_1'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -485,7 +419,7 @@ class TestApplyEqualToFilter:
     ):
         query = session.query(Bar)
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -501,7 +435,7 @@ class TestApplyNotEqualToFilter:
         query = session.query(Bar)
         filters = [{'field': 'name', 'op': operator, 'value': 'name_1'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -521,7 +455,7 @@ class TestApplyNotEqualToFilter:
             {'field': 'id', 'op': operator, 'value': 3}
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -539,7 +473,7 @@ class TestApplyGreaterThanFilter:
         query = session.query(Bar)
         filters = [{'field': 'count', 'op': operator, 'value': '5'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -557,7 +491,7 @@ class TestApplyGreaterThanFilter:
             {'field': 'id', 'op': operator, 'value': 2},
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -572,7 +506,7 @@ class TestApplyLessThanFilter:
         query = session.query(Bar)
         filters = [{'field': 'count', 'op': operator, 'value': '7'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -589,7 +523,7 @@ class TestApplyLessThanFilter:
             {'field': 'id', 'op': operator, 'value': 1},
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 0
@@ -603,7 +537,7 @@ class TestApplyGreaterOrEqualThanFilter:
         query = session.query(Bar)
         filters = [{'field': 'count', 'op': operator, 'value': '5'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 3
@@ -622,7 +556,7 @@ class TestApplyGreaterOrEqualThanFilter:
             {'field': 'id', 'op': operator, 'value': 4},
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -637,7 +571,7 @@ class TestApplyLessOrEqualThanFilter:
         query = session.query(Bar)
         filters = [{'field': 'count', 'op': operator, 'value': '15'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 3
@@ -656,7 +590,7 @@ class TestApplyLessOrEqualThanFilter:
             {'field': 'id', 'op': operator, 'value': 1},
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -670,7 +604,7 @@ class TestApplyLikeFilter:
         query = session.query(Bar)
         filters = [{'field': 'name', 'op': 'like', 'value': '%me_1'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -685,7 +619,7 @@ class TestApplyILikeFilter:
         query = session.query(Bar)
         filters = [{'field': 'name', 'op': 'ilike', 'value': '%ME_1'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -700,7 +634,7 @@ class TestApplyNotILikeFilter:
         query = session.query(Bar)
         filters = [{'field': 'name', 'op': 'not_ilike', 'value': '%ME_1'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -715,7 +649,7 @@ class TestApplyInFilter:
         query = session.query(Bar)
         filters = [{'field': 'count', 'op': 'in', 'value': [1, 2, 3]}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 0
@@ -725,7 +659,7 @@ class TestApplyInFilter:
         query = session.query(Bar)
         filters = [{'field': 'count', 'op': 'in', 'value': [15, 2, 3]}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -739,7 +673,7 @@ class TestApplyNotInFilter:
         query = session.query(Bar)
         filters = [{'field': 'count', 'op': 'not_in', 'value': [1, 2, 3]}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 3
@@ -752,7 +686,7 @@ class TestApplyNotInFilter:
         query = session.query(Bar)
         filters = [{'field': 'count', 'op': 'not_in', 'value': [15, 2, 3]}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -779,7 +713,7 @@ class TestApplyFindInSetFilter:
         query = session.query(Grault)
         filters = [{'field': 'types', 'op': 'in_set', 'value': value}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Grault, query, filters)
         result = filtered_query.all()
 
         assert len(result) == result_count
@@ -801,7 +735,7 @@ class TestCompositeField:
         query = session.query(Garply)
         filters = [{'field': 'points', 'op': '==', 'value': value}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Garply, query, filters)
         result = filtered_query.all()
 
         assert len(result) == result_count
@@ -827,7 +761,7 @@ class TestDateFields:
             'value': value
         }]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Qux, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -849,7 +783,7 @@ class TestDateFields:
             'value': value
         }]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Qux, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -861,7 +795,7 @@ class TestDateFields:
         query = session.query(Qux)
         filters = [{'field': 'created_at', 'op': 'is_null'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Qux, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -885,7 +819,7 @@ class TestTimeFields:
         query = session.query(Qux)
         filters = [{'field': 'expiration_time', 'op': '==', 'value': value}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Qux, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -910,7 +844,7 @@ class TestTimeFields:
             'value': value
         }]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Qux, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -922,7 +856,7 @@ class TestTimeFields:
         query = session.query(Qux)
         filters = [{'field': 'expiration_time', 'op': 'is_null'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Qux, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -951,7 +885,7 @@ class TestDateTimeFields:
             'value': value
         }]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Qux, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -979,7 +913,7 @@ class TestDateTimeFields:
             'value': value
         }]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Qux, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -995,7 +929,7 @@ class TestDateTimeFields:
         query = session.query(Qux)
         filters = [{'field': 'execution_time', 'op': 'is_null'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Qux, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -1014,7 +948,7 @@ class TestApplyBooleanFunctions:
             ]},
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -1030,7 +964,7 @@ class TestApplyBooleanFunctions:
             ]},
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -1047,7 +981,7 @@ class TestApplyBooleanFunctions:
             ]},
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 3
@@ -1077,7 +1011,7 @@ class TestApplyBooleanFunctions:
         filters = [{'or': or_args}]
 
         with pytest.raises(BadFilterFormat) as exc:
-            apply_filters(query, filters)
+            apply_filters(Bar, query, filters)
 
         assert expected_error in str(exc)
 
@@ -1091,7 +1025,7 @@ class TestApplyBooleanFunctions:
             ]},
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -1106,7 +1040,7 @@ class TestApplyBooleanFunctions:
             ]},
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -1123,7 +1057,7 @@ class TestApplyBooleanFunctions:
             ]},
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -1151,7 +1085,7 @@ class TestApplyBooleanFunctions:
         filters = [{'and': and_args}]
 
         with pytest.raises(BadFilterFormat) as exc:
-            apply_filters(query, filters)
+            apply_filters(Bar, query, filters)
 
         assert expected_error in str(exc)
 
@@ -1164,7 +1098,7 @@ class TestApplyBooleanFunctions:
             ]},
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 3
@@ -1199,7 +1133,7 @@ class TestApplyBooleanFunctions:
         filters = [{'not': not_args}]
 
         with pytest.raises(BadFilterFormat) as exc:
-            apply_filters(query, filters)
+            apply_filters(Bar, query, filters)
 
         assert expected_error in str(exc)
 
@@ -1224,7 +1158,7 @@ class TestApplyBooleanFunctions:
             }
         ]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -1251,7 +1185,7 @@ class TestApplyBooleanFunctions:
             },
         )
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
@@ -1268,7 +1202,7 @@ class TestApplyArrayFilters:
         query = session.query(Corge)
         filters = [{'field': 'tags', 'op': 'any', 'value': 'foo'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Corge, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -1283,7 +1217,7 @@ class TestApplyArrayFilters:
         query = session.query(Corge)
         filters = [{'field': 'tags', 'op': 'not_any', 'value': 'foo'}]
 
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Corge, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 2
@@ -1314,79 +1248,31 @@ class TestHybridAttributes:
         query = session.query(Bar)
         filters = [
             {
-                'model': 'Bar',
                 'field': field,
                 'op': '==',
                 'value': 100
             }
         ]
         with pytest.raises(FieldNotFound) as exc:
-            apply_filters(query, filters)
+            apply_filters(Bar, query, filters)
 
         assert expected_error in str(exc)
 
     @pytest.mark.usefixtures('multiple_bars_inserted')
-    @pytest.mark.usefixtures('multiple_quxs_inserted')
     def test_filter_by_hybrid_properties(self, session):
-        query = session.query(Bar, Qux)
+        query = session.query(Bar)
         filters = [
             {
-                'model': 'Bar',
                 'field': 'count_square',
                 'op': '==',
                 'value': 100
-            },
-            {
-                'model': 'Qux',
-                'field': 'count_square',
-                'op': '>=',
-                'value': 26
-            },
+            }
         ]
 
-        filtered_query = apply_filters(query, filters)
-        result = filtered_query.all()
-
-        assert len(result) == 2
-        bars, quxs = zip(*result)
-
-        assert set(map(type, bars)) == {Bar}
-        assert {bar.id for bar in bars} == {2}
-        assert {bar.count_square for bar in bars} == {100}
-
-        assert set(map(type, quxs)) == {Qux}
-        assert {qux.id for qux in quxs} == {2, 4}
-        assert {qux.count_square for qux in quxs} == {100, 225}
-
-    @pytest.mark.usefixtures('multiple_bars_inserted')
-    @pytest.mark.usefixtures('multiple_quxs_inserted')
-    def test_filter_by_hybrid_methods(self, session):
-        query = session.query(Bar, Qux)
-        filters = [
-            {
-                'model': 'Bar',
-                'field': 'three_times_count',
-                'op': '==',
-                'value': 30
-            },
-            {
-                'model': 'Qux',
-                'field': 'three_times_count',
-                'op': '>=',
-                'value': 31
-            },
-        ]
-
-        filtered_query = apply_filters(query, filters)
+        filtered_query = apply_filters(Bar, query, filters)
         result = filtered_query.all()
 
         assert len(result) == 1
-        bars, quxs = zip(*result)
 
-        assert set(map(type, bars)) == {Bar}
-        assert {bar.id for bar in bars} == {2}
-        assert {bar.three_times_count() for bar in bars} == {30}
-
-        assert set(map(type, quxs)) == {Qux}
-        assert {qux.id for qux in quxs} == {4}
-        assert {qux.three_times_count() for qux in quxs} == {45}
+        assert result[0].id == 2
+        assert result[0].count_square == 100
