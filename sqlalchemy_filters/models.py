@@ -88,7 +88,7 @@ def get_nested_column(model, field):
 
     # Search in relationships.
     if (part := parts[0]) in mapper.relationships:
-        return get_nested_column(getattr(model, part).class_, ".".join(parts[1::]))
+        return get_nested_column(getattr(model, part).property.entity.class_, ".".join(parts[1::]))
     else:
         return None
 
