@@ -180,14 +180,14 @@ def get_default_model(query):
     return default_model
 
 
-def auto_join(query, *relationships):
+def auto_join(query, *relationships, is_left_outer_join=False):
     """ Automatically join models to `query` if they're not already present.
     """
     for relationship in relationships:
         model = relationship.property.entity.class_
         if model not in get_query_models(query).values():
             try:
-                query = query.join(relationship)
+                query = query.join(relationship, isouter=is_left_outer_join)
             except InvalidRequestError:
                 pass  # can't be autojoined
     return query

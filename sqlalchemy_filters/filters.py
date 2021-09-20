@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from collections import namedtuple
+
 try:
     from collections.abc import Iterable
 except ImportError:  # pragma: no cover
@@ -20,7 +21,6 @@ from sqlalchemy import and_, or_, not_, func, inspect
 from .exceptions import BadFilterFormat
 from .models import Field, auto_join, get_model_from_spec, get_default_model, get_relationship_models
 
-
 BooleanFunction = namedtuple(
     'BooleanFunction', ('key', 'sqlalchemy_fn', 'only_one_arg')
 )
@@ -35,7 +35,6 @@ Sqlalchemy boolean functions that can be parsed from the filter definition.
 
 
 class Operator(object):
-
     OPERATORS = {
         'is_null': lambda f: f.is_(None),
         'is_not_null': lambda f: f.isnot(None),
@@ -141,8 +140,8 @@ def _is_iterable_filter(filter_spec):
     """ `filter_spec` may be a list of nested filter specs, or a dict.
     """
     return (
-        isinstance(filter_spec, Iterable) and
-        not isinstance(filter_spec, (string_types, dict))
+            isinstance(filter_spec, Iterable) and
+            not isinstance(filter_spec, (string_types, dict))
     )
 
 
@@ -195,7 +194,7 @@ def get_named_models(base_model, filters):
     return models
 
 
-def apply_filters(model, query, filter_spec, do_auto_join=True):
+def apply_filters(model, query, filter_spec, do_auto_join=True, is_left_join=False):
     """Apply filters to a SQLAlchemy query.
 
     :param model:
@@ -237,7 +236,7 @@ def apply_filters(model, query, filter_spec, do_auto_join=True):
 
     filter_models = get_named_models(model, filters)
     if do_auto_join:
-        query = auto_join(query, *filter_models)
+        query = auto_join(query, *filter_models, is_left_outer_join=is_left_join)
 
     sqlalchemy_filters = [
         filter.format_for_sqlalchemy(query, model)
