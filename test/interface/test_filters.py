@@ -18,11 +18,9 @@ ARRAY_NOT_SUPPORTED = (
     "ARRAY type and operators supported only by PostgreSQL"
 )
 
-
 SET_NOT_SUPPORTED = (
     "SET type and operators supported only by MySQL"
 )
-
 
 STRING_DATE_TIME_NOT_SUPPORTED = (
     "TODO: String Time / DateTime values currently not working as filters by "
@@ -36,7 +34,8 @@ def multiple_foos_inserted(session, multiple_bars_inserted):
     foo_2 = Foo(id=2, bar_id=2, name='name_2', count=100)
     foo_3 = Foo(id=3, bar_id=3, name='name_1', count=None)
     foo_4 = Foo(id=4, bar_id=4, name='name_4', count=150)
-    session.add_all([foo_1, foo_2, foo_3, foo_4])
+    foo_5 = Foo(id=5, name='name_1')
+    session.add_all([foo_1, foo_2, foo_3, foo_4, foo_5])
     session.commit()
 
 
@@ -210,7 +209,6 @@ class TestAutoJoin:
 
     @pytest.mark.usefixtures('multiple_foos_inserted')
     def test_auto_join(self, session):
-
         query = session.query(Foo)
         filters = [
             {'field': 'name', 'op': '==', 'value': 'name_1'},
@@ -226,8 +224,27 @@ class TestAutoJoin:
         assert result[0].bar.count is None
 
     @pytest.mark.usefixtures('multiple_foos_inserted')
-    def test_noop_if_query_contains_named_models(self, session):
+    def test_auto_left_join(self, session):
+        query = session.query(Foo)
+        filters = [
+            {'field': 'name', 'op': '==', 'value': 'name_1'},
+            {'field': 'bar.id', 'op': 'is_null'},
+        ]
 
+        filtered_left_join_query = apply_filters(Foo, query, filters, is_left_join=True)
+        filtered_inner_join_query = apply_filters(Foo, query, filters, is_left_join=False)
+
+        result_left_join = filtered_left_join_query.all()
+        result_inner_join = filtered_inner_join_query.all()
+
+        assert len(result_inner_join) == 0
+
+        assert len(result_left_join) == 1
+        assert result_left_join[0].id == 5
+        assert result_left_join[0].bar_id is None
+
+    @pytest.mark.usefixtures('multiple_foos_inserted')
+    def test_noop_if_query_contains_named_models(self, session):
         query = session.query(Foo).join(Bar)
         filters = [
             {'field': 'name', 'op': '==', 'value': 'name_1'},
