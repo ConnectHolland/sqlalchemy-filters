@@ -4,7 +4,7 @@ from sqlalchemy.orm import joinedload
 
 from sqlalchemy_filters.exceptions import BadSpec, BadQuery
 from sqlalchemy_filters.models import (
-    auto_join, get_default_model, get_query_models, get_model_class_by_name,
+    auto_join, get_default_model, get_query_models,
     get_model_from_spec
 )
 from test.models import Base, Bar, Foo, Qux
@@ -128,19 +128,6 @@ class TestGetModelFromSpec:
         assert 'Ambiguous spec. Please specify a model.' == err.value.args[0]
 
 
-class TestGetModelClassByName:
-
-    @pytest.fixture
-    def registry(self):
-        return Base._decl_class_registry
-
-    def test_exists(self, registry):
-        assert get_model_class_by_name(registry, 'Foo') == Foo
-
-    def test_model_does_not_exist(self, registry):
-        assert get_model_class_by_name(registry, 'Missing') is None
-
-
 class TestGetDefaultModel:
 
     def test_single_model_query(self, session):
@@ -160,7 +147,7 @@ class TestAutoJoin:
 
     def test_model_not_present(self, session, db_uri):
         query = session.query(Foo)
-        query = auto_join(query, 'Bar')
+        query = auto_join(query, *[Foo.bar])
 
         join_type = "INNER JOIN" if "mysql" in db_uri else "JOIN"
 
@@ -185,7 +172,7 @@ class TestAutoJoin:
         )
         assert str(query) == expected
 
-        query = auto_join(query, 'Bar')
+        query = auto_join(query, *[Foo.bar])
         assert str(query) == expected   # no change
 
     def test_model_already_joined(self, session, db_uri):
@@ -201,7 +188,7 @@ class TestAutoJoin:
         )
         assert str(query) == expected
 
-        query = auto_join(query, 'Bar')
+        query = auto_join(query, *[Foo.bar])
         assert str(query) == expected   # no change
 
     def test_model_eager_joined(self, session, db_uri):
@@ -231,19 +218,5 @@ class TestAutoJoin:
             )
         )
 
-        query = auto_join(query, 'Bar')
+        query = auto_join(query, *[Foo.bar])
         assert str(query) == expected_joined
-
-    def test_model_does_not_exist(self, session, db_uri):
-        query = session.query(Foo)
-
-        expected = (
-            "SELECT "
-            "foo.id AS foo_id, foo.name AS foo_name, "
-            "foo.count AS foo_count, foo.bar_id AS foo_bar_id \n"
-            "FROM foo"
-        )
-        assert str(query) == expected
-
-        query = auto_join(query, 'Missing')
-        assert str(query) == expected   # no change

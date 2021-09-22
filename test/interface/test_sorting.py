@@ -69,7 +69,7 @@ class TestSortNotApplied(object):
         query = session.query(Bar)
         order_by = []
 
-        filtered_query = apply_sort(query, order_by)
+        filtered_query = apply_sort(Bar, query, order_by)
 
         assert query == filtered_query
 
@@ -79,7 +79,7 @@ class TestSortNotApplied(object):
         order_by = [sort]
 
         with pytest.raises(BadSortFormat) as err:
-            apply_sort(query, order_by)
+            apply_sort(Bar, query, order_by)
 
         expected_error = 'Sort spec `{}` should be a dictionary.'.format(sort)
         assert expected_error == error_value(err)
@@ -89,7 +89,7 @@ class TestSortNotApplied(object):
         order_by = [{'direction': 'asc'}]
 
         with pytest.raises(BadSortFormat) as err:
-            apply_sort(query, order_by)
+            apply_sort(Bar, query, order_by)
 
         expected_error = '`field` and `direction` are mandatory attributes.'
         assert expected_error == error_value(err)
@@ -99,7 +99,7 @@ class TestSortNotApplied(object):
         order_by = [{'field': 'invalid_field', 'direction': 'asc'}]
 
         with pytest.raises(FieldNotFound) as err:
-            apply_sort(query, order_by)
+            apply_sort(Bar, query, order_by)
 
         expected_error = (
             "Model <class 'test.models.Bar'> has no column `invalid_field`."
@@ -111,7 +111,7 @@ class TestSortNotApplied(object):
         order_by = [{'field': 'name'}]
 
         with pytest.raises(BadSortFormat) as err:
-            apply_sort(query, order_by)
+            apply_sort(Bar, query, order_by)
 
         expected_error = '`field` and `direction` are mandatory attributes.'
         assert expected_error == error_value(err)
@@ -121,7 +121,7 @@ class TestSortNotApplied(object):
         order_by = [{'field': 'name', 'direction': 'invalid_direction'}]
 
         with pytest.raises(BadSortFormat) as err:
-            apply_sort(query, order_by)
+            apply_sort(Bar, query, order_by)
 
         expected_error = 'Direction `invalid_direction` not valid.'
         assert expected_error == error_value(err)
@@ -148,7 +148,7 @@ class TestSortApplied(object):
         query = session.query(Bar)
         order_by = [{'field': 'name', 'direction': 'asc'}]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [result.name for result in results] == [
@@ -163,7 +163,7 @@ class TestSortApplied(object):
         query = session.query(Bar)
         order_by = [{'field': 'name', 'direction': 'desc'}]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [result.name for result in results] == [
@@ -182,7 +182,7 @@ class TestSortApplied(object):
             {'field': 'id', 'direction': 'desc'},
         ]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [
@@ -236,7 +236,7 @@ class TestSortApplied(object):
             {'model': 'Qux', 'field': 'count', 'direction': 'asc'},
         ]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert len(results) == 4
@@ -250,7 +250,7 @@ class TestSortApplied(object):
         query = session.query(Bar)
         sort_spec = {'field': 'name', 'direction': 'desc'}
 
-        sorted_query = apply_sort(query, sort_spec)
+        sorted_query = apply_sort(Bar, query, sort_spec)
         results = sorted_query.all()
 
         assert [result.name for result in results] == [
@@ -271,11 +271,11 @@ class TestAutoJoin:
         query = session.query(Foo)
         order_by = [
             {'field': 'count', 'direction': 'desc'},
-            {'model': 'Bar', 'field': 'name', 'direction': 'asc'},
+            {'field': 'bar.name', 'direction': 'asc'},
             {'field': 'id', 'direction': 'asc'},
         ]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Foo, query, order_by)
         results = sorted_query.all()
 
         assert [
@@ -303,7 +303,7 @@ class TestAutoJoin:
             {'model': 'Foo', 'field': 'id', 'direction': 'asc'},
         ]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Foo, query, order_by)
         results = sorted_query.all()
 
         assert [
@@ -323,48 +323,16 @@ class TestAutoJoin:
         'multiple_bars_with_no_nulls_inserted',
         'multiple_foos_inserted'
     )
-    def test_auto_join_to_invalid_model(self, session):
-        query = session.query(Foo)
-        order_by = [
-            {'model': 'Foo', 'field': 'count', 'direction': 'desc'},
-            {'model': 'Bar', 'field': 'name', 'direction': 'asc'},
-            {'model': 'Qux', 'field': 'count', 'direction': 'asc'}
-        ]
-
-        with pytest.raises(BadSpec) as err:
-            apply_sort(query, order_by)
-
-        assert 'The query does not contain model `Qux`.' == err.value.args[0]
-
-    @pytest.mark.usefixtures(
-        'multiple_bars_with_no_nulls_inserted',
-        'multiple_foos_inserted'
-    )
-    def test_ambiguous_query(self, session):
-        query = session.query(Foo).join(Bar)
-        order_by = [
-            {'field': 'count', 'direction': 'asc'},  # ambiguous
-            {'model': 'Bar', 'field': 'name', 'direction': 'desc'},
-        ]
-        with pytest.raises(BadSpec) as err:
-            apply_sort(query, order_by)
-
-        assert 'Ambiguous spec. Please specify a model.' == err.value.args[0]
-
-    @pytest.mark.usefixtures(
-        'multiple_bars_with_no_nulls_inserted',
-        'multiple_foos_inserted'
-    )
     def test_eager_load(self, session):
         # behaves as if the joinedload wasn't present
         query = session.query(Foo).options(joinedload(Foo.bar))
         order_by = [
             {'field': 'count', 'direction': 'desc'},
-            {'model': 'Bar', 'field': 'name', 'direction': 'asc'},
+            {'field': 'bar.name', 'direction': 'asc'},
             {'field': 'id', 'direction': 'asc'},
         ]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Foo, query, order_by)
         results = sorted_query.all()
 
         assert [
@@ -399,7 +367,7 @@ class TestSortNullsFirst(object):
             {'field': 'count', 'direction': 'asc', 'nullsfirst': True}
         ]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [result.count for result in results] == [
@@ -416,7 +384,7 @@ class TestSortNullsFirst(object):
             {'field': 'count', 'direction': 'desc', 'nullsfirst': True}
         ]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [result.count for result in results] == [
@@ -436,7 +404,7 @@ class TestSortNullsFirst(object):
             {'field': 'count', 'direction': 'asc', 'nullsfirst': True},
         ]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [(result.name, result.count) for result in results] == [
@@ -463,7 +431,7 @@ class TestSortNullsFirst(object):
             {'field': 'count', 'direction': 'desc', 'nullsfirst': True},
         ]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [(result.name, result.count) for result in results] == [
@@ -496,7 +464,7 @@ class TestSortNullsLast(object):
             {'field': 'count', 'direction': 'asc', 'nullslast': True}
         ]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [result.count for result in results] == [
@@ -513,7 +481,7 @@ class TestSortNullsLast(object):
             {'field': 'count', 'direction': 'desc', 'nullslast': True}
         ]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [result.count for result in results] == [
@@ -531,7 +499,7 @@ class TestSortNullsLast(object):
             {'field': 'count', 'direction': 'asc', 'nullslast': True},
         ]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [(result.name, result.count) for result in results] == [
@@ -558,7 +526,7 @@ class TestSortNullsLast(object):
             {'field': 'count', 'direction': 'desc', 'nullslast': True},
         ]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [(result.name, result.count) for result in results] == [
@@ -594,7 +562,7 @@ class TestSortHybridAttributes(object):
         query = session.query(Bar)
         order_by = [{'field': 'count_square', 'direction': 'asc'}]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [result.count_square for result in results] == [
@@ -606,7 +574,7 @@ class TestSortHybridAttributes(object):
         query = session.query(Bar)
         order_by = [{'field': 'count_square', 'direction': 'desc'}]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [result.count_square for result in results] == [
@@ -618,7 +586,7 @@ class TestSortHybridAttributes(object):
         query = session.query(Bar)
         order_by = [{'field': 'three_times_count', 'direction': 'asc'}]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [result.three_times_count() for result in results] == [
@@ -630,7 +598,7 @@ class TestSortHybridAttributes(object):
         query = session.query(Bar)
         order_by = [{'field': 'three_times_count', 'direction': 'desc'}]
 
-        sorted_query = apply_sort(query, order_by)
+        sorted_query = apply_sort(Bar, query, order_by)
         results = sorted_query.all()
 
         assert [result.three_times_count() for result in results] == [

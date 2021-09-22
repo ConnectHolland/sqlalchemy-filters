@@ -98,4 +98,3 @@ class Garply(Base):
     x = Column(Integer)
     y = Column(Integer)
     points = composite(Point, x, y)
-
