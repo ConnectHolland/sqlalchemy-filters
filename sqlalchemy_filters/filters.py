@@ -16,10 +16,11 @@ except ImportError:  # pragma: no cover
 from itertools import chain
 
 from six import string_types
-from sqlalchemy import and_, or_, not_, func, inspect
+from sqlalchemy import and_, or_, not_, func
 
 from .exceptions import BadFilterFormat
-from .models import Field, auto_join, get_model_from_spec, get_default_model, get_relationship_models
+from .models import Field, auto_join, get_model_from_spec, get_relationship_models, \
+    should_outer_join_relationship
 
 BooleanFunction = namedtuple(
     'BooleanFunction', ('key', 'sqlalchemy_fn', 'only_one_arg')
@@ -94,7 +95,10 @@ class Filter(object):
 
     def get_named_models(self, model):
         field = self.filter_spec['field']
-        return get_relationship_models(model, field)
+        operator = self.filter_spec['op'] if 'op' in self.filter_spec else None
+
+        models = get_relationship_models(model, field)
+        return list(), models if should_outer_join_relationship(operator) else models, list()
 
     def format_for_sqlalchemy(self, query, default_model):
         filter_spec = self.filter_spec
@@ -124,10 +128,15 @@ class BooleanFilter(object):
         self.filters = filters
 
     def get_named_models(self, base_model):
-        models = set()
+        models_inner_join = set()
+        models_outer_join = set()
         for filter in self.filters:
-            models.update(filter.get_named_models(base_model))
-        return models
+            inner_join, outer_join = filter.get_named_models(base_model)
+
+            models_inner_join.update(inner_join)
+            models_outer_join.update(outer_join)
+
+        return models_inner_join, models_outer_join
 
     def format_for_sqlalchemy(self, query, default_model):
         return self.function(*[
@@ -188,13 +197,18 @@ def build_filters(filter_spec):
 
 
 def get_named_models(base_model, filters):
-    models = list()
+    inner_join_models = list()
+    outer_join_models = list()
+
     for filter in filters:
-        models.extend(filter.get_named_models(base_model))
-    return models
+        inner_join, outer_join = filter.get_named_models(base_model)
+        inner_join_models.extend(inner_join)
+        outer_join_models.extend(outer_join)
+
+    return inner_join_models, outer_join_models
 
 
-def apply_filters(model, query, filter_spec, do_auto_join=True, is_left_join=False):
+def apply_filters(model, query, filter_spec, do_auto_join=True):
     """Apply filters to a SQLAlchemy query.
 
     :param model:
@@ -233,10 +247,10 @@ def apply_filters(model, query, filter_spec, do_auto_join=True, is_left_join=Fal
         have been applied.
     """
     filters = build_filters(filter_spec)
+    inner_join_models, outer_join_models = get_named_models(model, filters)
 
-    filter_models = get_named_models(model, filters)
     if do_auto_join:
-        query = auto_join(query, *filter_models, is_left_outer_join=is_left_join)
+        query = auto_join(query, inner_join_models, outer_join_models)
 
     sqlalchemy_filters = [
         filter.format_for_sqlalchemy(query, model)

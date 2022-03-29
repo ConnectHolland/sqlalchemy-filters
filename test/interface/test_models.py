@@ -7,6 +7,8 @@ from sqlalchemy_filters.models import (
     auto_join, get_default_model, get_query_models,
     get_model_from_spec
 )
+from test.conftest import is_mysql
+from test.interface.test_filters import SET_NOT_SUPPORTED
 from test.models import Base, Bar, Foo, Qux
 
 
@@ -147,7 +149,7 @@ class TestAutoJoin:
 
     def test_model_not_present(self, session, db_uri):
         query = session.query(Foo)
-        query = auto_join(query, *[Foo.bar])
+        query = auto_join(query, [Foo.bar], [])
 
         join_type = "INNER JOIN" if "mysql" in db_uri else "JOIN"
 
@@ -172,7 +174,7 @@ class TestAutoJoin:
         )
         assert str(query) == expected
 
-        query = auto_join(query, *[Foo.bar])
+        query = auto_join(query, [Foo.bar], [])
         assert str(query) == expected   # no change
 
     def test_model_already_joined(self, session, db_uri):
@@ -188,7 +190,7 @@ class TestAutoJoin:
         )
         assert str(query) == expected
 
-        query = auto_join(query, *[Foo.bar])
+        query = auto_join(query, [Foo.bar], [])
         assert str(query) == expected   # no change
 
     def test_model_eager_joined(self, session, db_uri):
@@ -218,5 +220,20 @@ class TestAutoJoin:
             )
         )
 
-        query = auto_join(query, *[Foo.bar])
+        query = auto_join(query, [Foo.bar], [])
         assert str(query) == expected_joined
+
+    def test_outer_join(self, session, is_mysql, db_uri):
+        if not is_mysql:
+            pytest.skip(SET_NOT_SUPPORTED)
+
+        query = session.query(Foo)
+        query = auto_join(query, [], [Foo.bar])
+
+        expected = (
+            "SELECT "
+            "foo.id AS foo_id, foo.name AS foo_name, "
+            "foo.count AS foo_count, foo.bar_id AS foo_bar_id \n"
+            "FROM foo LEFT OUTER JOIN bar ON bar.id = foo.bar_id"
+        )
+        assert str(query) == expected
