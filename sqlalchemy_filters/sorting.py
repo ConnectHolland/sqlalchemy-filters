@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 
 from .exceptions import BadSortFormat
-from .models import Field, auto_join, get_model_from_spec, get_default_model, get_relationship_models
+from .models import Field, auto_join, get_model_from_spec, get_default_model, get_relationship_models, \
+    should_outer_join_relationship
 
 SORT_ASCENDING = 'asc'
 SORT_DESCENDING = 'desc'
@@ -34,7 +35,11 @@ class Sort(object):
 
     def get_named_models(self, model):
         field = self.sort_spec['field']
-        return get_relationship_models(model, field)
+        operator = self.sort_spec['op'] if 'op' in self.sort_spec else None
+
+        models = get_relationship_models(model, field)
+
+        return list(), models if should_outer_join_relationship(operator) else models, list()
 
     def format_for_sqlalchemy(self, query, default_model):
         sort_spec = self.sort_spec
@@ -60,10 +65,15 @@ class Sort(object):
 
 
 def get_named_models(base_model, sorts):
-    models = list()
+    inner_join_models = list()
+    outer_join_models = list()
+
     for sort in sorts:
-        models.extend(sort.get_named_models(base_model))
-    return models
+        inner_join, outer_join = sort.get_named_models(base_model)
+        inner_join_models.extend(inner_join)
+        outer_join_models.extend(outer_join)
+
+    return inner_join_models, outer_join_models
 
 
 def apply_sort(model, query, sort_spec):
@@ -107,8 +117,8 @@ def apply_sort(model, query, sort_spec):
 
     sorts = [Sort(item) for item in sort_spec]
 
-    sort_models = get_named_models(model, sorts)
-    query = auto_join(query, *sort_models)
+    inner_join_models, outer_join_models = get_named_models(model, sorts)
+    query = auto_join(query, inner_join_models, outer_join_models)
 
     sqlalchemy_sorts = [
         sort.format_for_sqlalchemy(query, model) for sort in sorts
