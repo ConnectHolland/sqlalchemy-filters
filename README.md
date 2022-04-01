@@ -147,6 +147,15 @@ query_alt_2 = session.query(func.count(Foo.id))
 query_alt_3 = session.query().select_from(Foo).add_column(Foo.id)
 ```
 
+The automatic join will inner join relationships by default, to
+outer join a relationship add the `outer_join` property to yur spec:
+
+``` {.sourceCode .python}
+filter_spec = [
+    {'field': 'bar.count', 'op': 'is_null', 'outer_join': True},
+]
+```
+
 ### Hybrid attributes
 
 You can filter by a [hybrid
