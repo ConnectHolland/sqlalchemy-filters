@@ -56,10 +56,6 @@ def get_relationship_models(model, field):
     return list()
 
 
-def should_outer_join_relationship(operator):
-    return operator == 'is_null'
-
-
 def find_nested_relationship_model(mapper, field):
     parts = field if isinstance(field, list) else field.split(".")
 

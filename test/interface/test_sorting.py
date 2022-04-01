@@ -29,7 +29,8 @@ def multiple_foos_inserted(session):
     foo_6 = Foo(id=6, bar_id=6, name='name_4', count=2)
     foo_7 = Foo(id=7, bar_id=7, name='name_1', count=2)
     foo_8 = Foo(id=8, bar_id=8, name='name_5', count=2)
-    session.add_all([foo_1, foo_2, foo_3, foo_4, foo_5, foo_6, foo_7, foo_8])
+    foo_9 = Foo(id=9, bar_id=None, name='name_7', count=2)
+    session.add_all([foo_1, foo_2, foo_3, foo_4, foo_5, foo_6, foo_7, foo_8, foo_9])
     session.commit()
 
 
@@ -604,3 +605,39 @@ class TestSortHybridAttributes(object):
         assert [result.three_times_count() for result in results] == [
             45, 36, 30, 15, 9, 6, 6, 3
         ]
+
+
+class TestOuterJoinProperty:
+
+    @pytest.mark.usefixtures(
+        'multiple_bars_with_nulls_inserted',
+        'multiple_foos_inserted'
+    )
+    def test_outer_join(self, session):
+        query = session.query(Foo)
+        filters = [
+            {'field': 'bar.count', 'direction': 'desc', 'outer_join': True},
+        ]
+
+        filtered_query = apply_sort(Foo, query, filters)
+        result = filtered_query.all()
+
+        assert len(result) == 9
+
+    @pytest.mark.usefixtures(
+        'multiple_bars_with_nulls_inserted',
+        'multiple_foos_inserted'
+    )
+    def test_inner_join(self, session):
+        query = session.query(Foo)
+        filters = [
+            {'field': 'bar.count', 'direction': 'desc', 'outer_join': False},
+        ]
+
+        filtered_query = apply_sort(Foo, query, filters)
+        result = filtered_query.all()
+
+        assert len(result) == 8
+        for foo in result:
+            # Foo with Bar None is not included.
+            assert foo.id != 9

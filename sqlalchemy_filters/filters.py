@@ -19,8 +19,7 @@ from six import string_types
 from sqlalchemy import and_, or_, not_, func
 
 from .exceptions import BadFilterFormat
-from .models import Field, auto_join, get_model_from_spec, get_relationship_models, \
-    should_outer_join_relationship
+from .models import Field, auto_join, get_model_from_spec, get_relationship_models
 
 BooleanFunction = namedtuple(
     'BooleanFunction', ('key', 'sqlalchemy_fn', 'only_one_arg')
@@ -95,10 +94,10 @@ class Filter(object):
 
     def get_named_models(self, model):
         field = self.filter_spec['field']
-        operator = self.filter_spec['op'] if 'op' in self.filter_spec else None
+        outer_join = self.filter_spec['outer_join'] if 'outer_join' in self.filter_spec else False
 
         models = get_relationship_models(model, field)
-        return list(), models if should_outer_join_relationship(operator) else models, list()
+        return (list(), models) if outer_join else (models, list())
 
     def format_for_sqlalchemy(self, query, default_model):
         filter_spec = self.filter_spec

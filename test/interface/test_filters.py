@@ -218,7 +218,7 @@ class TestAutoJoin:
         filtered_query = apply_filters(Foo, query, filters)
         result = filtered_query.all()
 
-        assert len(result) == 2
+        assert len(result) == 1
         assert result[0].id == 3
         assert result[0].bar_id == 3
         assert result[0].bar.count is None
@@ -227,16 +227,29 @@ class TestAutoJoin:
     def test_auto_outer_join(self, session):
         query = session.query(Foo)
         filters = [
-            {'field': 'bar.name', 'op': 'is_null'},
+            {'field': 'bar.count', 'op': 'is_null', 'outer_join': True},
         ]
 
-        query = apply_filters(Foo, query, filters)
+        filtered_query = apply_filters(Foo, query, filters)
+        result = filtered_query.all()
 
-        result = query.all()
+        assert len(result) == 2
+
+        assert result[0].id == 3
+        assert result[1].id == 5
+
+    @pytest.mark.usefixtures('multiple_foos_inserted')
+    def test_auto_inner_join(self, session):
+        query = session.query(Foo)
+        filters = [
+            {'field': 'bar.count', 'op': 'is_null', 'outer_join': False},
+        ]
+
+        filtered_query = apply_filters(Foo, query, filters)
+        result = filtered_query.all()
 
         assert len(result) == 1
-        assert result[0].id == 5
-        assert result[0].bar_id is None
+        assert result[0].id == 3
 
     @pytest.mark.usefixtures('multiple_foos_inserted')
     def test_noop_if_query_contains_named_models(self, session):
@@ -267,7 +280,7 @@ class TestAutoJoin:
         filtered_query = apply_filters(Foo, query, filters)
         result = filtered_query.all()
 
-        assert len(result) == 2
+        assert len(result) == 1
         assert result[0].id == 3
         assert result[0].bar_id == 3
         assert result[0].bar.count is None
