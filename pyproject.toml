@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "sqlalchemy-filters"
-version = "0.14.0"
+version = "1.1.1"
 description = ""
 authors = ["Rob de Rijk <rob@connectholland.nl>"]
 repository = "https://github.com/ConnectHolland/sqlalchemy-filters"
