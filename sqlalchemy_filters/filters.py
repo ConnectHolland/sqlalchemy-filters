@@ -98,7 +98,7 @@ class Filter(object):
         operator = self.filter_spec['op'] if 'op' in self.filter_spec else None
 
         models = get_relationship_models(model, field)
-        return list(), models if should_outer_join_relationship(operator) else models, list()
+        return (list(), models) if should_outer_join_relationship(operator) else (models, list())
 
     def format_for_sqlalchemy(self, query, default_model):
         filter_spec = self.filter_spec

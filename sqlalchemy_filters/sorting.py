@@ -39,7 +39,7 @@ class Sort(object):
 
         models = get_relationship_models(model, field)
 
-        return list(), models if should_outer_join_relationship(operator) else models, list()
+        return (list(), models) if should_outer_join_relationship(operator) else (models, list())
 
     def format_for_sqlalchemy(self, query, default_model):
         sort_spec = self.sort_spec
