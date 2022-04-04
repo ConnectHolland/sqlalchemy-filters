@@ -148,7 +148,7 @@ query_alt_3 = session.query().select_from(Foo).add_column(Foo.id)
 ```
 
 The automatic join will inner join relationships by default, to
-outer join a relationship add the `outer_join` property to yur spec:
+outer join a relationship add the `outer_join` property to your spec:
 
 ``` {.sourceCode .python}
 filter_spec = [
