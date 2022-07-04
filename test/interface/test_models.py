@@ -1,5 +1,6 @@
 import pytest
 from sqlalchemy import func
+import sqlalchemy
 from sqlalchemy.orm import joinedload
 
 from sqlalchemy_filters.exceptions import BadSpec, BadQuery
@@ -130,6 +131,24 @@ class TestGetModelFromSpec:
         assert 'Ambiguous spec. Please specify a model.' == err.value.args[0]
 
 
+<<<<<<< HEAD
+=======
+class TestGetModelClassByName:
+
+    @pytest.fixture
+    def registry(self):
+        if sqlalchemy.__version__ < '1.4':
+            return Base._decl_class_registry
+        return Base.registry._class_registry
+
+    def test_exists(self, registry):
+        assert get_model_class_by_name(registry, 'Foo') == Foo
+
+    def test_model_does_not_exist(self, registry):
+        assert get_model_class_by_name(registry, 'Missing') is None
+
+
+>>>>>>> deniszorinets/fetaure/add_support_for_sqlalchemy_1_4
 class TestGetDefaultModel:
 
     def test_single_model_query(self, session):
