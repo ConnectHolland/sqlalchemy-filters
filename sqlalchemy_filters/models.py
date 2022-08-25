@@ -312,12 +312,8 @@ def join_relationship_1_4(query, relationship, outer_join=False):
     """ Automatically join models to `query` if they're not already present
     and the join can be done implicitly. Works for sqlalchemy 1.4
     """
-    # every model has access to the registry, so we can use any from the query
-    query_models = get_query_models(query).values()
-    model_registry = list(query_models)[-1].registry._class_registry
-
-    model = get_model_class_by_name(model_registry, relationship)
-    if model and model not in query_models:
+    model = relationship.property.entity.class_
+    if model not in get_query_models(query).values():
         try:
             tmp_query = query.join(model, isouter=outer_join)
             tmp_query.statement.compile()
