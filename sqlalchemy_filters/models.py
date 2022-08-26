@@ -315,7 +315,7 @@ def join_relationship_1_4(query, relationship, outer_join=False):
     model = relationship.property.entity.class_
     if model not in get_query_models(query).values():
         try:
-            tmp_query = query.join(model, isouter=outer_join)
+            tmp_query = query.join(relationship, isouter=outer_join)
             tmp_query.statement.compile()
             query = tmp_query
         except InvalidRequestError:
