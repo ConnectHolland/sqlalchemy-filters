@@ -56,8 +56,16 @@ def get_relationship_models(model, field):
     return list()
 
 
-def should_outer_join_relationship(operator):
+def should_filter_outer_join_relationship(operator):
     return operator == 'is_null'
+
+
+def should_sort_outer_join_relationship(models):
+    return any(
+        column.nullable
+        for rel_model in models
+        for column in rel_model.prop.local_columns
+    )
 
 
 def find_nested_relationship_model(mapper, field):
