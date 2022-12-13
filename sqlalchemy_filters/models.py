@@ -61,11 +61,12 @@ def should_filter_outer_join_relationship(operator):
 
 
 def should_sort_outer_join_relationship(models):
-    return any(
-        column.nullable
-        for rel_model in models
-        for column in rel_model.prop.local_columns
-    )
+    for rel_model in models:
+        if rel_model.prop.direction == symbol('ONETOMANY'):
+            return True
+        elif any(column.nullable for column in rel_model.prop.local_columns):
+            return True
+    return False
 
 
 def find_nested_relationship_model(mapper, field):
