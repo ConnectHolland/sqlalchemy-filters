@@ -10,7 +10,6 @@ from sqlalchemy_filters.sorting import apply_sort
 from test import error_value
 from test.models import Foo, Bar, Qux
 
-
 NULLSFIRST_NOT_SUPPORTED = (
     "'nullsfirst' only supported by PostgreSQL in the current tests"
 )
@@ -244,6 +243,52 @@ class TestSortApplied(object):
         assert results[1].id == 1
         assert results[2].id == 4
         assert results[3].id == 2
+
+    def test_nullable_relationships(self, session):
+        bar_1 = Bar(id=1, name='name_1', count=5)
+        bar_2 = Bar(id=2, name='name_2', count=20)
+        bar_3 = Bar(id=3, name='name_1', count=None)
+        bar_4 = Bar(id=4, name='name_4', count=10)
+        foo_1 = Foo(id=1, bar_id=1, name='name_1', count=1)
+        foo_2 = Foo(id=2, bar_id=2, name='name_2', count=1)
+        foo_3 = Foo(id=3, bar_id=3, name='name_1', count=1)
+        foo_4 = Foo(id=4, bar_id=4, name='name_4', count=1)
+        foo_5 = Foo(id=5, bar_id=None, name='name_1', count=2)
+        foo_6 = Foo(id=6, bar_id=None, name='name_4', count=2)
+        foo_7 = Foo(id=7, bar_id=None, name='name_2', count=2)
+        foo_8 = Foo(id=8, bar_id=None, name='name_5', count=2)
+        session.add_all([
+            bar_1, bar_2, bar_3, bar_4,
+            foo_1, foo_2, foo_3, foo_4, foo_5, foo_6, foo_7, foo_8,
+        ])
+        session.commit()
+
+        query = session.query(Foo)
+        sort_spec = [
+            {'field': 'bar.count', 'direction': 'desc'},
+            {'field': 'name', 'direction': 'asc'},
+        ]
+        sorted_query = apply_sort(Foo, query, sort_spec)
+        results = sorted_query.all()
+        assert len(results) == 8
+        results_with_bar = results[:4]
+        results_without_bar = results[4:]
+        assert [
+            (result.id, result.bar.count, result.name) for result in results_with_bar
+        ] == [
+            (2, 20, 'name_2'),
+            (4, 10, 'name_4'),
+            (1, 5, 'name_1'),
+            (3, None, 'name_1'),
+        ]
+        assert [
+            (result.id, result.bar, result.name) for result in results_without_bar
+        ] == [
+            (5, None, 'name_1'),
+            (7, None, 'name_2'),
+            (6, None, 'name_4'),
+            (8, None, 'name_5'),
+        ]
 
     @pytest.mark.usefixtures('multiple_bars_with_no_nulls_inserted')
     def test_a_single_dict_can_be_supplied_as_sort_spec(self, session):

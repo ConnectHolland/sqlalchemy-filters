@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
 
 from .exceptions import BadSortFormat
-from .models import Field, auto_join, get_model_from_spec, get_default_model, get_relationship_models, \
-    should_outer_join_relationship
+from .models import (
+    Field,
+    auto_join,
+    get_model_from_spec,
+    get_relationship_models,
+    should_sort_outer_join_relationship,
+)
 
 SORT_ASCENDING = 'asc'
 SORT_DESCENDING = 'desc'
@@ -35,11 +40,9 @@ class Sort(object):
 
     def get_named_models(self, model):
         field = self.sort_spec['field']
-        operator = self.sort_spec['op'] if 'op' in self.sort_spec else None
-
         models = get_relationship_models(model, field)
 
-        return (list(), models) if should_outer_join_relationship(operator) else (models, list())
+        return (list(), models) if should_sort_outer_join_relationship(models) else (models, list())
 
     def format_for_sqlalchemy(self, query, default_model):
         sort_spec = self.sort_spec

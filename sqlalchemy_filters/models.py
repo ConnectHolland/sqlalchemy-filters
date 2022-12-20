@@ -56,8 +56,17 @@ def get_relationship_models(model, field):
     return list()
 
 
-def should_outer_join_relationship(operator):
+def should_filter_outer_join_relationship(operator):
     return operator == 'is_null'
+
+
+def should_sort_outer_join_relationship(models):
+    for rel_model in models:
+        if rel_model.prop.direction == symbol('ONETOMANY'):
+            return True
+        elif any(column.nullable for column in rel_model.prop.local_columns):
+            return True
+    return False
 
 
 def find_nested_relationship_model(mapper, field):
