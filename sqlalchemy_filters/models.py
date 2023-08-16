@@ -115,7 +115,7 @@ def get_query_models(query):
     :returns:
         A dictionary with all the models included in the query.
     """
-    models = [col_desc['entity'] for col_desc in query.column_descriptions]
+    models = [col_desc['entity'] for col_desc in query.column_descriptions if col_desc['entity']]
     models.extend(mapper.class_ for mapper in query._join_entities)
 
     # account also query.select_from entities
