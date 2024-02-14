@@ -1,10 +1,17 @@
+from sqlalchemy import __version__ as sqlalchemy_version
 from sqlalchemy.exc import InvalidRequestError
+from sqlalchemy.orm import mapperlib
 from sqlalchemy.inspection import inspect
-from sqlalchemy.orm.mapper import Mapper
 from sqlalchemy.util import symbol
 import types
 
 from .exceptions import BadQuery, FieldNotFound, BadSpec
+
+
+def sqlalchemy_version_lt(version):
+    """compares sqla version < version"""
+
+    return tuple(sqlalchemy_version.split('.')) < tuple(version.split('.'))
 
 
 class Field(object):
@@ -104,6 +111,16 @@ def get_nested_column(model, field):
         return get_nested_column(getattr(model, part).property.entity.class_, ".".join(parts[1::]))
     else:
         return None
+    
+    
+def get_model_from_table(table):  # pragma: no_cover_sqlalchemy_lt_1_4
+    """Resolve model class from table object"""
+
+    for registry in mapperlib._all_registries():
+        for mapper in registry.mappers:
+            if table in mapper.tables:
+                return mapper.class_
+    return None
 
 
 def get_query_models(query):
@@ -116,20 +133,39 @@ def get_query_models(query):
         A dictionary with all the models included in the query.
     """
     models = [col_desc['entity'] for col_desc in query.column_descriptions if col_desc['entity']]
-    models.extend(mapper.class_ for mapper in query._join_entities)
+
+    # account joined entities
+    if sqlalchemy_version_lt('1.4'):  # pragma: no_cover_sqlalchemy_gte_1_4
+        models.extend(mapper.class_ for mapper in query._join_entities)
+    else:  # pragma: no_cover_sqlalchemy_lt_1_4
+        try:
+            models.extend(
+                mapper.class_
+                for mapper
+                in query._compile_state()._join_entities
+            )
+        except InvalidRequestError:
+            # query might not contain columns yet, hence cannot be compiled
+            # try to infer the models from various internals
+            for table_tuple in query._setup_joins + query._legacy_setup_joins:
+                model_class = get_model_from_table(table_tuple[0])
+                if model_class:
+                    models.append(model_class)
 
     # account also query.select_from entities
-    if (
-        hasattr(query, '_select_from_entity') and
-        (query._select_from_entity is not None)
-    ):
-        model_class = (
-            query._select_from_entity.class_
-            if isinstance(query._select_from_entity, Mapper)  # sqlalchemy>=1.1
-            else query._select_from_entity  # sqlalchemy==1.0
-        )
-        if model_class not in models:
-            models.append(model_class)
+    model_class = None
+    if sqlalchemy_version_lt('1.4'):  # pragma: no_cover_sqlalchemy_gte_1_4
+        if query._select_from_entity:
+            model_class = (
+                query._select_from_entity
+                if sqlalchemy_version_lt('1.1')
+                else query._select_from_entity.class_
+            )
+    else:  # pragma: no_cover_sqlalchemy_lt_1_4
+        if query._from_obj:
+            model_class = get_model_from_table(query._from_obj[0])
+    if model_class and (model_class not in models):
+        models.append(model_class)
 
     return {model.__name__: model for model in models}
 
