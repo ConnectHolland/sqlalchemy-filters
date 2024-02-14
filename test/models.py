@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from sqlalchemy import (
-    Column, Date, DateTime, ForeignKey, Integer, String, Time
-)
+from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, String, Time
 from sqlalchemy.dialects.mysql import SET
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.declarative import declarative_base
@@ -49,28 +47,28 @@ BaseMysqlSpecific = declarative_base(cls=Base)
 
 class Foo(Base):
 
-    __tablename__ = 'foo'
+    __tablename__ = "foo"
 
-    bar_id = Column(Integer, ForeignKey('bar.id'), nullable=True)
-    bar = relationship('Bar', back_populates='foos')
+    bar_id = Column(Integer, ForeignKey("bar.id"), nullable=True)
+    bar = relationship("Bar", back_populates="foos")
 
 
 class Bar(Base):
 
-    __tablename__ = 'bar'
-    foos = relationship('Foo', back_populates='bar')
+    __tablename__ = "bar"
+    foos = relationship("Foo", back_populates="bar")
 
 
 class Baz(Base):
 
-    __tablename__ = 'baz'
+    __tablename__ = "baz"
 
-    qux_id = Column(Integer, ForeignKey('qux.id'), nullable=True)
+    qux_id = Column(Integer, ForeignKey("qux.id"), nullable=True)
 
 
 class Qux(Base):
 
-    __tablename__ = 'qux'
+    __tablename__ = "qux"
 
     created_at = Column(Date)
     execution_time = Column(DateTime)
@@ -79,21 +77,21 @@ class Qux(Base):
 
 class Corge(BasePostgresqlSpecific):
 
-    __tablename__ = 'corge'
+    __tablename__ = "corge"
 
     tags = Column(ARRAY(String, dimensions=1))
 
 
 class Grault(BaseMysqlSpecific):
 
-    __tablename__ = 'grault'
+    __tablename__ = "grault"
 
     types = Column(SET("foo", "bar", "baz"), nullable=True)
 
 
 class Garply(Base):
 
-    __tablename__ = 'garply'
+    __tablename__ = "garply"
 
     x = Column(Integer)
     y = Column(Integer)

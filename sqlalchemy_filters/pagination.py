@@ -55,8 +55,7 @@ def apply_pagination(query, page_number=None, page_size=None):
     num_pages = _calculate_num_pages(page_number, page_size, total_results)
 
     Pagination = namedtuple(
-        'Pagination',
-        ['page_number', 'page_size', 'num_pages', 'total_results']
+        "Pagination", ["page_number", "page_size", "num_pages", "total_results"]
     )
     return query, Pagination(page_number, page_size, num_pages, total_results)
 
@@ -64,9 +63,7 @@ def apply_pagination(query, page_number=None, page_size=None):
 def _limit(query, page_size):
     if page_size is not None:
         if page_size < 0:
-            raise InvalidPage(
-                'Page size should not be negative: {}'.format(page_size)
-            )
+            raise InvalidPage("Page size should not be negative: {}".format(page_size))
 
         query = query.limit(page_size)
 
@@ -76,9 +73,7 @@ def _limit(query, page_size):
 def _offset(query, page_number, page_size):
     if page_number is not None:
         if page_number < 1:
-            raise InvalidPage(
-                'Page number should be positive: {}'.format(page_number)
-            )
+            raise InvalidPage("Page number should be positive: {}".format(page_number))
 
         query = query.offset((page_number - 1) * page_size)
 

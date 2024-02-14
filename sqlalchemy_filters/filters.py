@@ -17,12 +17,12 @@ from .models import (
 )
 
 BooleanFunction = namedtuple(
-    'BooleanFunction', ('key', 'sqlalchemy_fn', 'only_one_arg')
+    "BooleanFunction", ("key", "sqlalchemy_fn", "only_one_arg")
 )
 BOOLEAN_FUNCTIONS = [
-    BooleanFunction('or', or_, False),
-    BooleanFunction('and', and_, False),
-    BooleanFunction('not', not_, True),
+    BooleanFunction("or", or_, False),
+    BooleanFunction("and", and_, False),
+    BooleanFunction("not", not_, True),
 ]
 """
 Sqlalchemy boolean functions that can be parsed from the filter definition.
@@ -31,36 +31,36 @@ Sqlalchemy boolean functions that can be parsed from the filter definition.
 
 class Operator(object):
     OPERATORS = {
-        'is_null': lambda f: f.is_(None),
-        'is_not_null': lambda f: f.isnot(None),
-        '==': lambda f, a: f == a,
-        'eq': lambda f, a: f == a,
-        '!=': lambda f, a: f != a,
-        'ne': lambda f, a: f != a,
-        '>': lambda f, a: f > a,
-        'gt': lambda f, a: f > a,
-        '<': lambda f, a: f < a,
-        'lt': lambda f, a: f < a,
-        '>=': lambda f, a: f >= a,
-        'ge': lambda f, a: f >= a,
-        '<=': lambda f, a: f <= a,
-        'le': lambda f, a: f <= a,
-        'like': lambda f, a: f.like(a),
-        'ilike': lambda f, a: f.ilike(a),
-        'not_ilike': lambda f, a: ~f.ilike(a),
-        'in': lambda f, a: f.in_(a),
-        'not_in': lambda f, a: ~f.in_(a),
-        'any': lambda f, a: f.any(a),
-        'not_any': lambda f, a: func.not_(f.any(a)),
-        'in_set': lambda f, a: func.find_in_set(a, f),
+        "is_null": lambda f: f.is_(None),
+        "is_not_null": lambda f: f.isnot(None),
+        "==": lambda f, a: f == a,
+        "eq": lambda f, a: f == a,
+        "!=": lambda f, a: f != a,
+        "ne": lambda f, a: f != a,
+        ">": lambda f, a: f > a,
+        "gt": lambda f, a: f > a,
+        "<": lambda f, a: f < a,
+        "lt": lambda f, a: f < a,
+        ">=": lambda f, a: f >= a,
+        "ge": lambda f, a: f >= a,
+        "<=": lambda f, a: f <= a,
+        "le": lambda f, a: f <= a,
+        "like": lambda f, a: f.like(a),
+        "ilike": lambda f, a: f.ilike(a),
+        "not_ilike": lambda f, a: ~f.ilike(a),
+        "in": lambda f, a: f.in_(a),
+        "not_in": lambda f, a: ~f.in_(a),
+        "any": lambda f, a: f.any(a),
+        "not_any": lambda f, a: func.not_(f.any(a)),
+        "in_set": lambda f, a: func.find_in_set(a, f),
     }
 
     def __init__(self, operator=None):
         if not operator:
-            operator = '=='
+            operator = "=="
 
         if operator not in self.OPERATORS:
-            raise BadFilterFormat('Operator `{}` not valid.'.format(operator))
+            raise BadFilterFormat("Operator `{}` not valid.".format(operator))
 
         self.operator = operator
         self.function = self.OPERATORS[operator]
@@ -73,26 +73,30 @@ class Filter(object):
         self.filter_spec = filter_spec
 
         try:
-            filter_spec['field']
+            filter_spec["field"]
         except KeyError:
-            raise BadFilterFormat('`field` is a mandatory filter attribute.')
+            raise BadFilterFormat("`field` is a mandatory filter attribute.")
         except TypeError:
             raise BadFilterFormat(
-                'Filter spec `{}` should be a dictionary.'.format(filter_spec)
+                "Filter spec `{}` should be a dictionary.".format(filter_spec)
             )
 
-        self.operator = Operator(filter_spec.get('op'))
-        self.value = filter_spec.get('value')
-        value_present = True if 'value' in filter_spec else False
+        self.operator = Operator(filter_spec.get("op"))
+        self.value = filter_spec.get("value")
+        value_present = True if "value" in filter_spec else False
         if not value_present and self.operator.arity == 2:
-            raise BadFilterFormat('`value` must be provided.')
+            raise BadFilterFormat("`value` must be provided.")
 
     def get_named_models(self, model):
-        field = self.filter_spec['field']
-        operator = self.filter_spec['op'] if 'op' in self.filter_spec else None
+        field = self.filter_spec["field"]
+        operator = self.filter_spec["op"] if "op" in self.filter_spec else None
 
         models = get_relationship_models(model, field)
-        return (list(), models) if should_filter_outer_join_relationship(operator) else (models, list())
+        return (
+            (list(), models)
+            if should_filter_outer_join_relationship(operator)
+            else (models, list())
+        )
 
     def format_for_sqlalchemy(self, query, default_model):
         filter_spec = self.filter_spec
@@ -104,7 +108,7 @@ class Filter(object):
         function = operator.function
         arity = operator.arity
 
-        field_name = self.filter_spec['field']
+        field_name = self.filter_spec["field"]
         field = Field(model, field_name)
         sqlalchemy_field = field.get_sqlalchemy_field()
 
@@ -133,28 +137,26 @@ class BooleanFilter(object):
         return models_inner_join, models_outer_join
 
     def format_for_sqlalchemy(self, query, default_model):
-        return self.function(*[
-            filter.format_for_sqlalchemy(query, default_model)
-            for filter in self.filters
-        ])
+        return self.function(
+            *[
+                filter.format_for_sqlalchemy(query, default_model)
+                for filter in self.filters
+            ]
+        )
 
 
 def _is_iterable_filter(filter_spec):
-    """ `filter_spec` may be a list of nested filter specs, or a dict.
-    """
-    return (
-            isinstance(filter_spec, Iterable) and
-            not isinstance(filter_spec, (string_types, dict))
+    """`filter_spec` may be a list of nested filter specs, or a dict."""
+    return isinstance(filter_spec, Iterable) and not isinstance(
+        filter_spec, (string_types, dict)
     )
 
 
 def build_filters(filter_spec):
-    """ Recursively process `filter_spec` """
+    """Recursively process `filter_spec`"""
 
     if _is_iterable_filter(filter_spec):
-        return list(chain.from_iterable(
-            build_filters(item) for item in filter_spec
-        ))
+        return list(chain.from_iterable(build_filters(item) for item in filter_spec))
 
     if isinstance(filter_spec, dict):
         # Check if filter spec defines a boolean function.
@@ -166,18 +168,16 @@ def build_filters(filter_spec):
 
                 if not _is_iterable_filter(fn_args):
                     raise BadFilterFormat(
-                        '`{}` value must be an iterable across the function '
-                        'arguments'.format(boolean_function.key)
+                        "`{}` value must be an iterable across the function "
+                        "arguments".format(boolean_function.key)
                     )
                 if boolean_function.only_one_arg and len(fn_args) != 1:
                     raise BadFilterFormat(
-                        '`{}` must have one argument'.format(
-                            boolean_function.key
-                        )
+                        "`{}` must have one argument".format(boolean_function.key)
                     )
                 if not boolean_function.only_one_arg and len(fn_args) < 1:
                     raise BadFilterFormat(
-                        '`{}` must have one or more arguments'.format(
+                        "`{}` must have one or more arguments".format(
                             boolean_function.key
                         )
                     )
@@ -247,8 +247,7 @@ def apply_filters(model, query, filter_spec, do_auto_join=True):
         query = auto_join(query, inner_join_models, outer_join_models)
 
     sqlalchemy_filters = [
-        filter.format_for_sqlalchemy(query, model)
-        for filter in filters
+        filter.format_for_sqlalchemy(query, model) for filter in filters
     ]
 
     if sqlalchemy_filters:

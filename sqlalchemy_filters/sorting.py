@@ -9,8 +9,8 @@ from .models import (
     should_sort_outer_join_relationship,
 )
 
-SORT_ASCENDING = 'asc'
-SORT_DESCENDING = 'desc'
+SORT_ASCENDING = "asc"
+SORT_DESCENDING = "desc"
 
 
 class Sort(object):
@@ -19,30 +19,32 @@ class Sort(object):
         self.sort_spec = sort_spec
 
         try:
-            field_name = sort_spec['field']
-            direction = sort_spec['direction']
+            field_name = sort_spec["field"]
+            direction = sort_spec["direction"]
         except KeyError:
-            raise BadSortFormat(
-                '`field` and `direction` are mandatory attributes.'
-            )
+            raise BadSortFormat("`field` and `direction` are mandatory attributes.")
         except TypeError:
             raise BadSortFormat(
-                'Sort spec `{}` should be a dictionary.'.format(sort_spec)
+                "Sort spec `{}` should be a dictionary.".format(sort_spec)
             )
 
         if direction not in [SORT_ASCENDING, SORT_DESCENDING]:
-            raise BadSortFormat('Direction `{}` not valid.'.format(direction))
+            raise BadSortFormat("Direction `{}` not valid.".format(direction))
 
         self.field_name = field_name
         self.direction = direction
-        self.nullsfirst = sort_spec.get('nullsfirst')
-        self.nullslast = sort_spec.get('nullslast')
+        self.nullsfirst = sort_spec.get("nullsfirst")
+        self.nullslast = sort_spec.get("nullslast")
 
     def get_named_models(self, model):
-        field = self.sort_spec['field']
+        field = self.sort_spec["field"]
         models = get_relationship_models(model, field)
 
-        return (list(), models) if should_sort_outer_join_relationship(models) else (models, list())
+        return (
+            (list(), models)
+            if should_sort_outer_join_relationship(models)
+            else (models, list())
+        )
 
     def format_for_sqlalchemy(self, query, default_model):
         sort_spec = self.sort_spec
@@ -123,9 +125,7 @@ def apply_sort(model, query, sort_spec):
     inner_join_models, outer_join_models = get_named_models(model, sorts)
     query = auto_join(query, inner_join_models, outer_join_models)
 
-    sqlalchemy_sorts = [
-        sort.format_for_sqlalchemy(query, model) for sort in sorts
-    ]
+    sqlalchemy_sorts = [sort.format_for_sqlalchemy(query, model) for sort in sorts]
 
     if sqlalchemy_sorts:
         query = query.order_by(*sqlalchemy_sorts)

@@ -11,7 +11,7 @@ from .exceptions import BadQuery, FieldNotFound, BadSpec
 def sqlalchemy_version_lt(version):
     """compares sqla version < version"""
 
-    return tuple(sqlalchemy_version.split('.')) < tuple(version.split('.'))
+    return tuple(sqlalchemy_version.split(".")) < tuple(version.split("."))
 
 
 class Field(object):
@@ -25,9 +25,7 @@ class Field(object):
 
         if sqlalchemy_field is None:
             raise FieldNotFound(
-                'Model {} has no column `{}`.'.format(
-                    self.model, self.field_name
-                )
+                "Model {} has no column `{}`.".format(self.model, self.field_name)
             )
 
         # If it's a hybrid method, then we call it so that we can work with
@@ -39,11 +37,11 @@ class Field(object):
 
 
 def _is_hybrid_property(orm_descriptor):
-    return orm_descriptor.extension_type == symbol('HYBRID_PROPERTY')
+    return orm_descriptor.extension_type == symbol("HYBRID_PROPERTY")
 
 
 def _is_hybrid_method(orm_descriptor):
-    return orm_descriptor.extension_type == symbol('HYBRID_METHOD')
+    return orm_descriptor.extension_type == symbol("HYBRID_METHOD")
 
 
 def get_relationship_models(model, field):
@@ -55,7 +53,9 @@ def get_relationship_models(model, field):
 
         # Find all relationships.
         for i in range(1, len(parts)):
-            if (column := find_nested_relationship_model(inspect(model), parts[0:i])) is not None:
+            if (
+                column := find_nested_relationship_model(inspect(model), parts[0:i])
+            ) is not None:
                 relationships.append(column.class_attribute)
 
         return relationships
@@ -64,12 +64,12 @@ def get_relationship_models(model, field):
 
 
 def should_filter_outer_join_relationship(operator):
-    return operator == 'is_null'
+    return operator == "is_null"
 
 
 def should_sort_outer_join_relationship(models):
     for rel_model in models:
-        if rel_model.prop.direction == symbol('ONETOMANY'):
+        if rel_model.prop.direction == symbol("ONETOMANY"):
             return True
         elif any(column.nullable for column in rel_model.prop.local_columns):
             return True
@@ -81,7 +81,11 @@ def find_nested_relationship_model(mapper, field):
 
     if (part := parts[0]) in mapper.relationships:
         related_field = mapper.relationships[part]
-        return find_nested_relationship_model(related_field.mapper, ".".join(parts[1::])) if len(parts) > 1 else related_field
+        return (
+            find_nested_relationship_model(related_field.mapper, ".".join(parts[1::]))
+            if len(parts) > 1
+            else related_field
+        )
     else:
         return None
 
@@ -95,24 +99,38 @@ def get_nested_column(model, field):
     mapper = inspect(model)
     orm_descriptors = mapper.all_orm_descriptors
     hybrid_fields = [
-        key for key, item in orm_descriptors.items()
+        key
+        for key, item in orm_descriptors.items()
         if _is_hybrid_property(item) or _is_hybrid_method(item)
     ]
 
     # Search in own model fields
     if len(parts) == 1:
-        if field in mapper.columns or field in mapper.composites or field in hybrid_fields:
+        if (
+            field in mapper.columns
+            or field in mapper.composites
+            or field in hybrid_fields
+        ):
             return getattr(model, field)
         else:
             return None
 
     # Search in relationships.
     if (part := parts[0]) in mapper.relationships:
-        return get_nested_column(getattr(model, part).property.entity.class_, ".".join(parts[1::]))
+        return get_nested_column(
+            getattr(model, part).property.entity.class_, ".".join(parts[1::])
+        )
     else:
         return None
-    
-    
+
+
+def get_model_class_by_name(registry, name):
+    """Return the model class matching `name` in the given `registry`."""
+    for cls in registry.values():
+        if getattr(cls, "__name__", None) == name:
+            return cls
+
+
 def get_model_from_table(table):  # pragma: no_cover_sqlalchemy_lt_1_4
     """Resolve model class from table object"""
 
@@ -132,17 +150,19 @@ def get_query_models(query):
     :returns:
         A dictionary with all the models included in the query.
     """
-    models = [col_desc['entity'] for col_desc in query.column_descriptions if col_desc['entity']]
+    models = [
+        col_desc["entity"]
+        for col_desc in query.column_descriptions
+        if col_desc["entity"]
+    ]
 
     # account joined entities
-    if sqlalchemy_version_lt('1.4'):  # pragma: no_cover_sqlalchemy_gte_1_4
+    if sqlalchemy_version_lt("1.4"):  # pragma: no_cover_sqlalchemy_gte_1_4
         models.extend(mapper.class_ for mapper in query._join_entities)
     else:  # pragma: no_cover_sqlalchemy_lt_1_4
         try:
             models.extend(
-                mapper.class_
-                for mapper
-                in query._compile_state()._join_entities
+                mapper.class_ for mapper in query._compile_state()._join_entities
             )
         except InvalidRequestError:
             # query might not contain columns yet, hence cannot be compiled
@@ -154,11 +174,11 @@ def get_query_models(query):
 
     # account also query.select_from entities
     model_class = None
-    if sqlalchemy_version_lt('1.4'):  # pragma: no_cover_sqlalchemy_gte_1_4
+    if sqlalchemy_version_lt("1.4"):  # pragma: no_cover_sqlalchemy_gte_1_4
         if query._select_from_entity:
             model_class = (
                 query._select_from_entity
-                if sqlalchemy_version_lt('1.1')
+                if sqlalchemy_version_lt("1.1")
                 else query._select_from_entity.class_
             )
     else:  # pragma: no_cover_sqlalchemy_lt_1_4
@@ -171,7 +191,7 @@ def get_query_models(query):
 
 
 def get_model_from_spec(spec, query, default_model=None):
-    """ Determine the model to which a spec applies on a given query.
+    """Determine the model to which a spec applies on a given query.
 
     A spec that does not specify a model may be applied to a query that
     contains a single model. Otherwise the spec must specify the model to
@@ -196,15 +216,13 @@ def get_model_from_spec(spec, query, default_model=None):
     """
     models = get_query_models(query)
     if not models:
-        raise BadQuery('The query does not contain any models.')
+        raise BadQuery("The query does not contain any models.")
 
-    model_name = spec.get('model')
+    model_name = spec.get("model")
     if model_name is not None:
         models = [v for (k, v) in models.items() if k == model_name]
         if not models:
-            raise BadSpec(
-                'The query does not contain model `{}`.'.format(model_name)
-            )
+            raise BadSpec("The query does not contain model `{}`.".format(model_name))
         model = models[0]
     else:
         if len(models) == 1:
@@ -218,20 +236,19 @@ def get_model_from_spec(spec, query, default_model=None):
 
 
 def get_default_model(query):
-    """ Return the singular model from `query`, or `None` if `query` contains
+    """Return the singular model from `query`, or `None` if `query` contains
     multiple models.
     """
     query_models = get_query_models(query).values()
     if len(query_models) == 1:
-        default_model, = iter(query_models)
+        (default_model,) = iter(query_models)
     else:
         default_model = None
     return default_model
 
 
 def auto_join(query, inner_join_relationships, outer_join_relationships):
-    """ Automatically join models to `query` if they're not already present.
-    """
+    """Automatically join models to `query` if they're not already present."""
     for relationship in outer_join_relationships:
         query = join_relationship(query, relationship, True)
 
