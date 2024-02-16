@@ -17,6 +17,10 @@ psycopg2-binary = { version = "2.9.1", optional = true }
 pytest = "^6.2.5"
 sqlalchemy-utils = "^0.37.8"
 
+[tool.poetry.group.dev.dependencies]
+black = "^24.2.0"
+poethepoet = "^0.24.4"
+
 [build-system]
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
@@ -24,3 +28,6 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.extras]
 mysql = ["mysql-connector-python-rf"]
 postgresql = ["psycopg2-binary"]
+
+[tool.poe.tasks]
+test = "pytest test"

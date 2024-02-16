@@ -4,8 +4,13 @@ from sqlalchemy.orm import joinedload
 
 from sqlalchemy_filters.exceptions import BadSpec, BadQuery
 from sqlalchemy_filters.models import (
-    auto_join, get_default_model, get_query_models,
-    get_model_from_spec
+    auto_join,
+    get_default_model,
+    get_query_models,
+    get_model_class_by_name,
+    get_model_from_spec,
+    sqlalchemy_version_lt,
+    get_model_from_table,
 )
 from test.conftest import is_mysql
 from test.interface.test_filters import SET_NOT_SUPPORTED
@@ -13,6 +18,18 @@ from test.models import Base, Bar, Foo, Qux
 
 
 class TestGetQueryModels(object):
+    @pytest.mark.skipif(
+        sqlalchemy_version_lt("1.4"), reason="tests sqlalchemy 1.4 code"
+    )
+    def test_returns_none_for_unknown_table(self):
+
+        class FakeUnmappedTable:
+            pass
+
+        table = FakeUnmappedTable()
+
+        result = get_model_from_table(table)
+        assert result is None
 
     def test_query_with_no_models(self, session):
         query = session.query()
@@ -26,63 +43,70 @@ class TestGetQueryModels(object):
 
         entities = get_query_models(query)
 
-        assert {'Bar': Bar} == entities
+        assert {"Bar": Bar} == entities
 
     def test_query_with_select_from_model(self, session):
         query = session.query().select_from(Bar)
 
         entities = get_query_models(query)
 
-        assert {'Bar': Bar} == entities
+        assert {"Bar": Bar} == entities
+
+    def test_query_with_select_from_and_join_model(self, session):
+        query = session.query().select_from(Bar).join(Foo)
+
+        entities = get_query_models(query)
+
+        assert {"Bar": Bar, "Foo": Foo} == entities
 
     def test_query_with_multiple_models(self, session):
         query = session.query(Bar, Qux)
 
         entities = get_query_models(query)
 
-        assert {'Bar': Bar, 'Qux': Qux} == entities
+        assert {"Bar": Bar, "Qux": Qux} == entities
 
     def test_query_with_duplicated_models(self, session):
         query = session.query(Bar, Qux, Bar)
 
         entities = get_query_models(query)
 
-        assert {'Bar': Bar, 'Qux': Qux} == entities
+        assert {"Bar": Bar, "Qux": Qux} == entities
 
     def test_query_with_one_field(self, session):
         query = session.query(Foo.id)
 
         entities = get_query_models(query)
 
-        assert {'Foo': Foo} == entities
+        assert {"Foo": Foo} == entities
 
     def test_query_with_multiple_fields(self, session):
         query = session.query(Foo.id, Bar.id, Bar.name)
 
         entities = get_query_models(query)
 
-        assert {'Foo': Foo, 'Bar': Bar} == entities
+        assert {"Foo": Foo, "Bar": Bar} == entities
 
     def test_query_with_aggregate_func(self, session):
         query = session.query(func.count(Foo.id))
 
         entities = get_query_models(query)
 
-        assert {'Foo': Foo} == entities
+        assert {"Foo": Foo} == entities
 
     def test_query_with_join(self, session):
         query = session.query(Foo).join(Bar)
 
         entities = get_query_models(query)
 
-        assert {'Foo': Foo, 'Bar': Bar} == entities
+        assert {"Foo": Foo, "Bar": Bar} == entities
 
     def test_query_with_multiple_joins(self, session):
         query = session.query(Foo).join(Bar).join(Qux, Bar.id == Qux.id)
 
         entities = get_query_models(query)
 
-        assert {'Foo': Foo, 'Bar': Bar, 'Qux': Qux} == entities
+        assert {"Foo": Foo, "Bar": Bar, "Qux": Qux} == entities
 
     def test_query_with_joinedload(self, session):
         query = session.query(Foo).options(joinedload(Foo.bar))
@@ -90,44 +114,61 @@ class TestGetQueryModels(object):
         entities = get_query_models(query)
 
         # Bar is not added to the query since the joinedload is transparent
-        assert {'Foo': Foo} == entities
+        assert {"Foo": Foo} == entities
 
 
 class TestGetModelFromSpec:
 
     def test_query_with_no_models(self, session):
         query = session.query()
-        spec = {'field': 'name', 'op': '==', 'value': 'name_1'}
+        spec = {"field": "name", "op": "==", "value": "name_1"}
 
         with pytest.raises(BadQuery) as err:
             get_model_from_spec(spec, query)
 
-        assert 'The query does not contain any models.' == err.value.args[0]
+        assert "The query does not contain any models." == err.value.args[0]
 
     def test_query_with_named_model(self, session):
         query = session.query(Bar)
-        spec = {'model': 'Bar'}
+        spec = {"model": "Bar"}
 
         model = get_model_from_spec(spec, query)
         assert model == Bar
 
     def test_query_with_missing_named_model(self, session):
         query = session.query(Bar)
-        spec = {'model': 'Buz'}
+        spec = {"model": "Buz"}
 
         with pytest.raises(BadSpec) as err:
             get_model_from_spec(spec, query)
 
-        assert 'The query does not contain model `Buz`.' == err.value.args[0]
+        assert "The query does not contain model `Buz`." == err.value.args[0]
 
     def test_multiple_models_ambiquous_spec(self, session):
         query = session.query(Bar, Qux)
-        spec = {'field': 'name', 'op': '==', 'value': 'name_1'}
+        spec = {"field": "name", "op": "==", "value": "name_1"}
 
         with pytest.raises(BadSpec) as err:
             get_model_from_spec(spec, query)
 
-        assert 'Ambiguous spec. Please specify a model.' == err.value.args[0]
+        assert "Ambiguous spec. Please specify a model." == err.value.args[0]
+
+
+class TestGetModelClassByName:
+
+    @pytest.fixture
+    def registry(self):
+        return (
+            Base._decl_class_registry
+            if sqlalchemy_version_lt("1.4")
+            else Base.registry._class_registry
+        )
+
+    def test_exists(self, registry):
+        assert get_model_class_by_name(registry, "Foo") == Foo
+
+    def test_model_does_not_exist(self, registry):
+        assert get_model_class_by_name(registry, "Missing") is None
 
 
 class TestGetDefaultModel:
@@ -175,7 +216,7 @@ class TestAutoJoin:
         assert str(query) == expected
 
         query = auto_join(query, [Foo.bar], [])
-        assert str(query) == expected   # no change
+        assert str(query) == expected  # no change
 
     def test_model_already_joined(self, session, db_uri):
         query = session.query(Foo).join(Bar)
@@ -191,7 +232,7 @@ class TestAutoJoin:
         assert str(query) == expected
 
         query = auto_join(query, [Foo.bar], [])
-        assert str(query) == expected   # no change
+        assert str(query) == expected  # no change
 
     def test_model_eager_joined(self, session, db_uri):
         query = session.query(Foo).options(joinedload(Foo.bar))

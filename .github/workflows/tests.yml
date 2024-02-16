@@ -1,0 +1,14 @@
+name: Pull request checks
+
+on:
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: self-hosted
+    steps:
+      - name: Install project and dependencies
+        uses: actions/checkout@v4
+      - name: Run tests
+        uses: Harborn-digital/github-action-poetry-poe-task@python3.11
+  
